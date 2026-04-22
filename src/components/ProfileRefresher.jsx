@@ -72,6 +72,10 @@ export default function ProfileRefresher() {
           if (profile.niche && !current.niche && cols.niche) {
             updates.push({ range: `${cols.niche}${rowNum}`, value: profile.niche });
           }
+          // Write the full Instagram URL to the website/link column if currently blank
+          if (!current.website && cols.website) {
+            updates.push({ range: `${cols.website}${rowNum}`, value: `https://www.instagram.com/${username}/` });
+          }
 
           if (updates.length > 0) {
             await writeNiches(accessToken, updates);

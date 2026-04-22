@@ -47,6 +47,17 @@ export async function writeNiches(accessToken, updates) {
   return res.json();
 }
 
+// Detects a "website / link / url" column that should receive the full IG profile URL.
+// Matches common names like "Website", "Link", "URL", "Instagram URL", "Profile Link", etc.
+function findWebsiteCol(headers) {
+  return headers.findIndex(h =>
+    h === 'website' || h === 'link' || h === 'url' ||
+    h === 'profile link' || h === 'profile url' || h === 'ig url' || h === 'ig link' ||
+    h.includes('website') ||
+    (h.includes('instagram') && (h.includes('url') || h.includes('link') || h.includes('profile')))
+  );
+}
+
 export async function buildInstagramUpdates(accessToken) {
   const { values } = await readSheetRows(accessToken);
   if (!values || values.length < 2) throw new Error('Sheet appears to be empty');
@@ -54,11 +65,13 @@ export async function buildInstagramUpdates(accessToken) {
   const headers = values[0].map(h => h.toLowerCase().trim());
   const nameCol = headers.findIndex(h => h === 'name' || h === 'full name');
   const igCol = headers.findIndex(h => h.includes('instagram') && !h.includes('follower'));
+  const websiteCol = findWebsiteCol(headers);
 
   if (nameCol === -1) throw new Error('No Name column found in the sheet.');
   if (igCol === -1) throw new Error('No Instagram column found in the sheet.');
 
-  const igLetter = colToLetter(igCol);
+  const igLetter      = colToLetter(igCol);
+  const websiteLetter = websiteCol >= 0 ? colToLetter(websiteCol) : null;
 
   const toFind = [];
   values.slice(1).forEach((row, i) => {
@@ -67,7 +80,7 @@ export async function buildInstagramUpdates(accessToken) {
     if (name && !ig) toFind.push({ rowNum: i + 2, name });
   });
 
-  return { toFind, igLetter };
+  return { toFind, igLetter, websiteLetter };
 }
 
 export async function appendInfluencerRow(accessToken, profile) {
@@ -79,6 +92,10 @@ export async function appendInfluencerRow(accessToken, profile) {
 
   // Build a row array aligned to the sheet's existing columns
   const row = Array(colCount).fill('');
+  const websiteColIdx = findWebsiteCol(headers);
+  const igUsername = (profile.handle || '').replace(/^@/, '');
+  const igUrl = igUsername ? `https://www.instagram.com/${igUsername}/` : '';
+
   headers.forEach((h, i) => {
     if (h === 'name' || h === 'full name') row[i] = profile.name || '';
     else if (h.includes('instagram') && !h.includes('follower')) row[i] = profile.handle || '';
@@ -88,6 +105,9 @@ export async function appendInfluencerRow(accessToken, profile) {
     else if (h.includes('niche') || h.includes('industry') || h.includes('category')) row[i] = profile.niche || '';
     else if (h.includes('engagement') || h === 'er' || h === 'eng rate') row[i] = profile.engagement != null ? `${profile.engagement}%` : '';
   });
+
+  // Write the full Instagram URL to the website/link column if one exists
+  if (websiteColIdx >= 0 && igUrl) row[websiteColIdx] = igUrl;
 
   const res = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/A:${colToLetter(colCount - 1)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
@@ -118,6 +138,7 @@ export async function buildRefreshUpdates(accessToken) {
   const locCol     = headers.findIndex(h => h.includes('location') || h.includes('city') || h.includes('country'));
   const nicheCol   = headers.findIndex(h => h.includes('niche') || h.includes('industry') || h.includes('category'));
   const engCol     = headers.findIndex(h => h.includes('engagement') || h === 'er' || h === 'eng rate');
+  const websiteCol = findWebsiteCol(headers);
 
   if (igCol === -1) throw new Error('No Instagram column found in the sheet.');
 
@@ -130,16 +151,18 @@ export async function buildRefreshUpdates(accessToken) {
       rowNum: i + 2,
       username,
       current: {
-        email:    (row[emailCol]  || '').trim(),
-        location: (row[locCol]    || '').trim(),
-        niche:    (row[nicheCol]  || '').trim(),
+        email:    (row[emailCol]   || '').trim(),
+        location: (row[locCol]     || '').trim(),
+        niche:    (row[nicheCol]   || '').trim(),
+        website:  (row[websiteCol] || '').trim(),
       },
       cols: {
-        followers: followCol >= 0  ? colToLetter(followCol)  : null,
-        email:     emailCol  >= 0  ? colToLetter(emailCol)   : null,
-        location:  locCol    >= 0  ? colToLetter(locCol)     : null,
-        niche:     nicheCol  >= 0  ? colToLetter(nicheCol)   : null,
-        engagement: engCol   >= 0  ? colToLetter(engCol)     : null,
+        followers:  followCol  >= 0 ? colToLetter(followCol)  : null,
+        email:      emailCol   >= 0 ? colToLetter(emailCol)   : null,
+        location:   locCol     >= 0 ? colToLetter(locCol)     : null,
+        niche:      nicheCol   >= 0 ? colToLetter(nicheCol)   : null,
+        engagement: engCol     >= 0 ? colToLetter(engCol)     : null,
+        website:    websiteCol >= 0 ? colToLetter(websiteCol) : null,
       },
     });
   });

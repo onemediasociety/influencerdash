@@ -27,7 +27,7 @@ export default function InstagramFinder() {
     setError('');
     let savedCount = 0;
     try {
-      const { toFind, igLetter } = await buildInstagramUpdates(accessToken);
+      const { toFind, igLetter, websiteLetter } = await buildInstagramUpdates(accessToken);
       setTotalSearched(toFind.length);
       setProgress({ done: 0, total: toFind.length, current: '', found: 0 });
 
@@ -37,7 +37,12 @@ export default function InstagramFinder() {
         setProgress(p => ({ ...p, current: name }));
         const handle = await lookupInstagramHandle(name);
         if (handle) {
-          await writeNiches(accessToken, [{ range: `${igLetter}${rowNum}`, value: handle }]);
+          const username = handle.replace(/^@/, '');
+          const updates = [{ range: `${igLetter}${rowNum}`, value: handle }];
+          if (websiteLetter) {
+            updates.push({ range: `${websiteLetter}${rowNum}`, value: `https://www.instagram.com/${username}/` });
+          }
+          await writeNiches(accessToken, updates);
           savedCount++;
         }
         setProgress(p => ({ done: p.done + 1, total: p.total, current: name, found: savedCount }));
