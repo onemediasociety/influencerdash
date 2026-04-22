@@ -1,4 +1,38 @@
-const NICHES = [
+const BLOCKED_PATHS = new Set(['p', 'explore', 'accounts', 'stories', 'reels', 'tv', 'about', 'legal', 'privacy', 'help', 'press', 'api', 'directory', 'hashtag', 'locations', 'web', 'ar', 'lite', 'music']);
+
+export async function lookupInstagramHandle(name) {
+  if (!name) return null;
+
+  try {
+    const query = encodeURIComponent(`"${name}" site:instagram.com`);
+    const searchUrl = `https://html.duckduckgo.com/html/?q=${query}`;
+    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(searchUrl)}`;
+
+    const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(12000) });
+    if (!res.ok) return null;
+
+    const data = await res.json();
+    const html = data.contents || '';
+
+    // Extract all instagram.com/username patterns from result links
+    const matches = [...html.matchAll(/instagram\.com\/([a-zA-Z0-9._]{1,30})/g)];
+    const candidates = matches
+      .map(m => m[1].replace(/\/$/, ''))
+      .filter(u => u && !BLOCKED_PATHS.has(u.toLowerCase()));
+
+    // Return the first unique candidate
+    const seen = new Set();
+    for (const c of candidates) {
+      if (!seen.has(c.toLowerCase())) return `@${c}`;
+      seen.add(c.toLowerCase());
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+
   { name: 'Fitness & Health', keywords: /fitness|workout|gym|health|nutrition|trainer|wellness|yoga|pilates|hiit|bodybuilding|crossfit/ },
   { name: 'Food & Cuisine', keywords: /food|recipe|chef|cook|cuisine|restaurant|baking|pastry|foodie|eating|dinner|brunch|bbq/ },
   { name: 'Travel', keywords: /travel|explore|wanderlust|adventure|hotel|destination|nomad|backpack|trip|vacation|tourist/ },

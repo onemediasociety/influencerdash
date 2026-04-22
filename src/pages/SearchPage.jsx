@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import InfluencerCard from '../components/InfluencerCard';
 import InfluencerModal from '../components/InfluencerModal';
 import NicheResearcher from '../components/NicheResearcher';
+import InstagramFinder from '../components/InstagramFinder';
 
 const FOLLOWER_RANGES = [
   { label: 'All sizes', min: 0, max: Infinity },
@@ -111,6 +112,7 @@ export default function SearchPage() {
             <p className="text-sm text-gray-500">Live from your Google Sheet</p>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
+            <InstagramFinder />
             <NicheResearcher />
             <button
               onClick={sync}

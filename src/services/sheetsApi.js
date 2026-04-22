@@ -47,6 +47,29 @@ export async function writeNiches(accessToken, updates) {
   return res.json();
 }
 
+export async function buildInstagramUpdates(accessToken) {
+  const { values } = await readSheetRows(accessToken);
+  if (!values || values.length < 2) throw new Error('Sheet appears to be empty');
+
+  const headers = values[0].map(h => h.toLowerCase().trim());
+  const nameCol = headers.findIndex(h => h === 'name' || h === 'full name');
+  const igCol = headers.findIndex(h => h.includes('instagram') && !h.includes('follower'));
+
+  if (nameCol === -1) throw new Error('No Name column found in the sheet.');
+  if (igCol === -1) throw new Error('No Instagram column found in the sheet.');
+
+  const igLetter = colToLetter(igCol);
+
+  const toFind = [];
+  values.slice(1).forEach((row, i) => {
+    const name = (row[nameCol] || '').trim();
+    const ig = (row[igCol] || '').trim();
+    if (name && !ig) toFind.push({ rowNum: i + 2, name });
+  });
+
+  return { toFind, igLetter };
+}
+
 export async function buildNicheUpdates(accessToken, influencers) {
   const { values } = await readSheetRows(accessToken);
   if (!values || values.length < 2) throw new Error('Sheet appears to be empty');
