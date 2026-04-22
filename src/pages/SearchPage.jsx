@@ -3,6 +3,7 @@ import { Search, SlidersHorizontal, X, ChevronDown, RefreshCw, AlertCircle } fro
 import { useApp } from '../context/AppContext';
 import InfluencerCard from '../components/InfluencerCard';
 import InfluencerModal from '../components/InfluencerModal';
+import NicheResearcher from '../components/NicheResearcher';
 
 const FOLLOWER_RANGES = [
   { label: 'All sizes', min: 0, max: Infinity },
@@ -109,17 +110,20 @@ export default function SearchPage() {
             <h1 className="text-2xl font-bold text-gray-900">Discover Influencers</h1>
             <p className="text-sm text-gray-500">Live from your Google Sheet</p>
           </div>
-          <button
-            onClick={sync}
-            disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:border-purple-400 hover:text-purple-700 hover:bg-purple-50 transition-colors disabled:opacity-50 flex-shrink-0"
-          >
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-            {loading ? 'Syncing…' : 'Refresh'}
-            {lastSync && !loading && (
-              <span className="text-xs text-gray-400 font-normal">· {formatSyncTime(lastSync)}</span>
-            )}
-          </button>
+          <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
+            <NicheResearcher />
+            <button
+              onClick={sync}
+              disabled={loading}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:border-purple-400 hover:text-purple-700 hover:bg-purple-50 transition-colors disabled:opacity-50"
+            >
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+              {loading ? 'Syncing…' : 'Refresh'}
+              {lastSync && !loading && (
+                <span className="text-xs text-gray-400 font-normal">· {formatSyncTime(lastSync)}</span>
+              )}
+            </button>
+          </div>
         </div>
 
         <div className="flex gap-3">
