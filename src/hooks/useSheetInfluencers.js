@@ -160,24 +160,27 @@ export function useSheetInfluencers() {
         .map((row, i) => rowToInfluencer(row, colMap, i))
         .filter(inf => inf.handle); // skip completely blank rows
 
-      // Deduplicate by normalised handle — merge rows, preferring non-empty values
-      const seen = new Map();
+      // Deduplicate by handle OR name — merge rows, preferring non-empty values
+      const isEmpty = v => v === null || v === undefined || v === '' || v === 0;
+      const normalise = s => (s || '').toLowerCase().replace(/^@/, '').trim();
+
+      const merged = [];
       for (const inf of raw) {
-        const key = inf.handle.toLowerCase().replace(/^@/, '');
-        if (!seen.has(key)) {
-          seen.set(key, { ...inf });
+        const infHandle = normalise(inf.handle);
+        const infName = normalise(inf.name);
+        const existing = merged.find(m =>
+          (infHandle && normalise(m.handle) === infHandle) ||
+          (infName && normalise(m.name) === infName)
+        );
+        if (!existing) {
+          merged.push({ ...inf });
         } else {
-          const existing = seen.get(key);
-          // For each field, keep whichever row has a value (existing wins ties)
           for (const field of Object.keys(inf)) {
-            const val = inf[field];
-            const keep = existing[field];
-            const isEmpty = v => v === null || v === undefined || v === '' || v === 0;
-            if (isEmpty(keep) && !isEmpty(val)) existing[field] = val;
+            if (isEmpty(existing[field]) && !isEmpty(inf[field])) existing[field] = inf[field];
           }
         }
       }
-      const data = Array.from(seen.values());
+      const data = merged;
 
       setInfluencers(data);
       setLastSync(new Date());
