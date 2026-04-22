@@ -34,8 +34,15 @@ function usernameToName(username) {
     .join(' ');
 }
 
+async function proxyFetch(url, timeout = 14000) {
+  const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+  const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(timeout) });
+  if (!res.ok) return null;
+  const wrapper = await res.json();
+  return wrapper.contents || null;
+}
+
 export async function lookupInstagramProfile(input) {
-  // Accept handle, @handle, or full URL
   const username = input
     .trim()
     .replace(/^@/, '')
@@ -60,48 +67,64 @@ export async function lookupInstagramProfile(input) {
     source: 'sheet',
   };
 
+  // --- Strategy 1: Instagram's internal JSON API (structured, easier to parse) ---
   try {
-    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(`https://www.instagram.com/${username}/`)}`;
-    const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(15000) });
+    const raw = await proxyFetch(
+      `https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`
+    );
+    if (raw) {
+      const json = JSON.parse(raw);
+      const user = json?.data?.user;
+      if (user && (user.edge_followed_by?.count || user.biography != null)) {
+        if (user.full_name)               result.name      = user.full_name;
+        if (user.biography)               result.bio       = user.biography;
+        if (user.edge_followed_by?.count) result.followers = user.edge_followed_by.count;
+        const bio = user.biography || '';
+        result.email    = extractEmail(bio);
+        result.location = extractLocation(bio);
+        result.niche    = classifyNiche(`${user.category_name || ''} ${bio} ${username}`);
+        return result;
+      }
+    }
+  } catch {}
 
-    if (res.ok) {
-      const data = await res.json();
-      const html = data.contents || '';
-
-      const bioMatch = html.match(/"biography":"([^"]{0,600})"/);
-      const nameMatch = html.match(/"full_name":"([^"]+)"/);
+  // --- Strategy 2: profile HTML page ---
+  try {
+    const html = await proxyFetch(`https://www.instagram.com/${username}/`);
+    if (html && html.length > 1000) {
+      const bioMatch       = html.match(/"biography":"([^"]{0,600})"/);
+      const nameMatch      = html.match(/"full_name":"([^"]+)"/);
       const followersMatch = html.match(/"edge_followed_by":\{"count":(\d+)\}/);
-      const categoryMatch = html.match(/"category_name":"([^"]+)"/i);
+      const categoryMatch  = html.match(/"category_name":"([^"]+)"/i);
 
-      const bio = bioMatch ? safeJsonDecode(bioMatch[1]) : '';
+      const bio      = bioMatch  ? safeJsonDecode(bioMatch[1])  : '';
       const fullName = nameMatch ? safeJsonDecode(nameMatch[1]) : '';
 
-      if (fullName) result.name = fullName;
-      if (bio) result.bio = bio;
+      if (fullName)      result.name      = fullName;
+      if (bio)           result.bio       = bio;
       if (followersMatch) result.followers = parseInt(followersMatch[1]);
 
-      result.email = extractEmail(bio);
+      result.email    = extractEmail(bio);
       result.location = extractLocation(bio);
-      result.niche = classifyNiche(`${categoryMatch ? categoryMatch[1] : ''} ${bio} ${username}`);
+      result.niche    = classifyNiche(`${categoryMatch ? categoryMatch[1] : ''} ${bio} ${username}`);
 
       // Best-effort engagement rate from recent post likes + comments
       if (result.followers > 0) {
-        const likesMatches = [...html.matchAll(/"edge_liked_by":\{"count":(\d+)\}/g)].slice(0, 12);
+        const likesMatches    = [...html.matchAll(/"edge_liked_by":\{"count":(\d+)\}/g)].slice(0, 12);
         const commentsMatches = [...html.matchAll(/"edge_media_to_comment":\{"count":(\d+)\}/g)].slice(0, 12);
         if (likesMatches.length >= 3) {
-          const avgLikes = likesMatches.reduce((s, m) => s + parseInt(m[1]), 0) / likesMatches.length;
+          const avgLikes    = likesMatches.reduce((s, m) => s + parseInt(m[1]), 0) / likesMatches.length;
           const avgComments = commentsMatches.length > 0
-            ? commentsMatches.reduce((s, m) => s + parseInt(m[1]), 0) / commentsMatches.length
-            : 0;
+            ? commentsMatches.reduce((s, m) => s + parseInt(m[1]), 0) / commentsMatches.length : 0;
           const rate = (avgLikes + avgComments) / result.followers * 100;
           if (rate > 0 && rate < 100) result.engagement = parseFloat(rate.toFixed(2));
         }
       }
     }
-  } catch {
-    // Proxy failed — return best-effort result from username alone
-    result.niche = classifyNiche(username);
-  }
+  } catch {}
+
+  // If we still have no niche, derive from username alone
+  if (!result.niche) result.niche = classifyNiche(username);
 
   return result;
 }
