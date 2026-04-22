@@ -107,6 +107,46 @@ export async function appendInfluencerRow(accessToken, profile) {
   return res.json();
 }
 
+export async function buildRefreshUpdates(accessToken) {
+  const { values } = await readSheetRows(accessToken);
+  if (!values || values.length < 2) throw new Error('Sheet appears to be empty');
+
+  const headers = values[0].map(h => h.toLowerCase().trim());
+  const igCol      = headers.findIndex(h => h.includes('instagram') && !h.includes('follower'));
+  const followCol  = headers.findIndex(h => h.includes('follower'));
+  const emailCol   = headers.findIndex(h => h.includes('email'));
+  const locCol     = headers.findIndex(h => h.includes('location') || h.includes('city') || h.includes('country'));
+  const nicheCol   = headers.findIndex(h => h.includes('niche') || h.includes('industry') || h.includes('category'));
+  const engCol     = headers.findIndex(h => h.includes('engagement') || h === 'er' || h === 'eng rate');
+
+  if (igCol === -1) throw new Error('No Instagram column found in the sheet.');
+
+  const toRefresh = [];
+  values.slice(1).forEach((row, i) => {
+    const igRaw = (row[igCol] || '').trim();
+    const username = igRaw.replace(/^@/, '').replace(/.*instagram\.com\//, '').replace(/[/?#].*$/, '').toLowerCase();
+    if (!username) return;
+    toRefresh.push({
+      rowNum: i + 2,
+      username,
+      current: {
+        email:    (row[emailCol]  || '').trim(),
+        location: (row[locCol]    || '').trim(),
+        niche:    (row[nicheCol]  || '').trim(),
+      },
+      cols: {
+        followers: followCol >= 0  ? colToLetter(followCol)  : null,
+        email:     emailCol  >= 0  ? colToLetter(emailCol)   : null,
+        location:  locCol    >= 0  ? colToLetter(locCol)     : null,
+        niche:     nicheCol  >= 0  ? colToLetter(nicheCol)   : null,
+        engagement: engCol   >= 0  ? colToLetter(engCol)     : null,
+      },
+    });
+  });
+
+  return toRefresh;
+}
+
 export async function buildNicheUpdates(accessToken, influencers) {
   const { values } = await readSheetRows(accessToken);
   if (!values || values.length < 2) throw new Error('Sheet appears to be empty');
