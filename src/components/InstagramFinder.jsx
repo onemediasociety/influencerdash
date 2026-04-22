@@ -24,23 +24,26 @@ export default function InstagramFinder() {
   async function run(accessToken) {
     setStatus('working');
     setError('');
+    let savedCount = 0;
     try {
       const { toFind, igLetter } = await buildInstagramUpdates(accessToken);
       setProgress({ done: 0, total: toFind.length, current: '' });
 
       if (toFind.length === 0) { setStatus('done'); setFilled(0); return; }
 
-      const updates = [];
       for (const { rowNum, name } of toFind) {
         setProgress(p => ({ ...p, current: name }));
         const handle = await lookupInstagramHandle(name);
-        if (handle) updates.push({ range: `${igLetter}${rowNum}`, value: handle });
+        if (handle) {
+          // Write each handle to the sheet immediately so partial progress is never lost
+          await writeNiches(accessToken, [{ range: `${igLetter}${rowNum}`, value: handle }]);
+          savedCount++;
+        }
         setProgress(p => ({ done: p.done + 1, total: p.total, current: name }));
         await sleep(800);
       }
 
-      await writeNiches(accessToken, updates);
-      setFilled(updates.length);
+      setFilled(savedCount);
       setStatus('done');
       sync();
     } catch (err) {
@@ -77,7 +80,7 @@ export default function InstagramFinder() {
     <div className="flex items-center gap-3 px-4 py-2.5 bg-green-50 border border-green-200 rounded-xl">
       <CheckCircle size={15} className="text-green-600 flex-shrink-0" />
       <p className="text-sm font-medium text-green-700">
-        {filled > 0 ? `${filled} handles found!` : 'All handles already filled'}
+        {filled > 0 ? `${filled} handles saved to sheet!` : 'All handles already filled'}
       </p>
       <button onClick={() => setStatus('idle')} className="ml-1 text-green-600 hover:text-green-800 transition-colors" title="Run again">
         <RefreshCw size={13} />
