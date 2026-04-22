@@ -11,8 +11,9 @@ export default function InstagramFinder() {
   const { sync } = useApp();
   const [token, setToken] = useState(null);
   const [status, setStatus] = useState('idle');
-  const [progress, setProgress] = useState({ done: 0, total: 0, current: '' });
+  const [progress, setProgress] = useState({ done: 0, total: 0, current: '', found: 0 });
   const [filled, setFilled] = useState(0);
+  const [totalSearched, setTotalSearched] = useState(0);
   const [error, setError] = useState('');
 
   const login = useGoogleLogin({
@@ -27,7 +28,8 @@ export default function InstagramFinder() {
     let savedCount = 0;
     try {
       const { toFind, igLetter } = await buildInstagramUpdates(accessToken);
-      setProgress({ done: 0, total: toFind.length, current: '' });
+      setTotalSearched(toFind.length);
+      setProgress({ done: 0, total: toFind.length, current: '', found: 0 });
 
       if (toFind.length === 0) { setStatus('done'); setFilled(0); return; }
 
@@ -35,11 +37,10 @@ export default function InstagramFinder() {
         setProgress(p => ({ ...p, current: name }));
         const handle = await lookupInstagramHandle(name);
         if (handle) {
-          // Write each handle to the sheet immediately so partial progress is never lost
           await writeNiches(accessToken, [{ range: `${igLetter}${rowNum}`, value: handle }]);
           savedCount++;
         }
-        setProgress(p => ({ done: p.done + 1, total: p.total, current: name }));
+        setProgress(p => ({ done: p.done + 1, total: p.total, current: name, found: savedCount }));
         await sleep(800);
       }
 
@@ -67,10 +68,13 @@ export default function InstagramFinder() {
   );
 
   if (status === 'working') return (
-    <div className="flex items-center gap-3 px-4 py-2.5 bg-blue-50 border border-blue-200 rounded-xl min-w-[220px]">
+    <div className="flex items-center gap-3 px-4 py-2.5 bg-blue-50 border border-blue-200 rounded-xl min-w-[240px]">
       <Loader2 size={15} className="text-blue-600 animate-spin flex-shrink-0" />
       <div className="min-w-0">
-        <p className="text-sm font-medium text-blue-700">Finding {progress.done}/{progress.total}…</p>
+        <p className="text-sm font-medium text-blue-700">
+          Searching {progress.done}/{progress.total}
+          {progress.found > 0 && <span className="text-blue-500"> · {progress.found} found</span>}
+        </p>
         {progress.current && <p className="text-xs text-blue-400 truncate">{progress.current}</p>}
       </div>
     </div>
@@ -80,7 +84,11 @@ export default function InstagramFinder() {
     <div className="flex items-center gap-3 px-4 py-2.5 bg-green-50 border border-green-200 rounded-xl">
       <CheckCircle size={15} className="text-green-600 flex-shrink-0" />
       <p className="text-sm font-medium text-green-700">
-        {filled > 0 ? `${filled} handles saved to sheet!` : 'All handles already filled'}
+        {totalSearched === 0
+          ? 'All handles already filled'
+          : filled > 0
+            ? `${filled}/${totalSearched} handles saved to sheet!`
+            : `Searched ${totalSearched} names — none found (search may be blocked)`}
       </p>
       <button onClick={() => setStatus('idle')} className="ml-1 text-green-600 hover:text-green-800 transition-colors" title="Run again">
         <RefreshCw size={13} />

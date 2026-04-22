@@ -1,35 +1,51 @@
 const BLOCKED_PATHS = new Set(['p', 'explore', 'accounts', 'stories', 'reels', 'tv', 'about', 'legal', 'privacy', 'help', 'press', 'api', 'directory', 'hashtag', 'locations', 'web', 'ar', 'lite', 'music']);
 
+function extractIgHandles(html) {
+  const matches = [...html.matchAll(/instagram\.com\/([a-zA-Z0-9._]{1,30})/g)];
+  return matches
+    .map(m => m[1].replace(/\/$/, ''))
+    .filter(u => u && !BLOCKED_PATHS.has(u.toLowerCase()));
+}
+
+function mostFrequent(candidates) {
+  if (!candidates.length) return null;
+  const freq = {};
+  for (const c of candidates) freq[c.toLowerCase()] = (freq[c.toLowerCase()] || 0) + 1;
+  const topKey = Object.entries(freq).sort((a, b) => b[1] - a[1])[0][0];
+  return candidates.find(c => c.toLowerCase() === topKey) || null;
+}
+
 export async function lookupInstagramHandle(name) {
   if (!name) return null;
 
-  try {
-    const query = encodeURIComponent(`"${name}" site:instagram.com`);
-    const searchUrl = `https://html.duckduckgo.com/html/?q=${query}`;
-    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(searchUrl)}`;
+  // Try two DuckDuckGo variants — lite is less aggressively bot-blocked
+  const queries = [
+    `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(`"${name}" site:instagram.com`)}`,
+    `https://html.duckduckgo.com/html/?q=${encodeURIComponent(`"${name}" site:instagram.com`)}`,
+    `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(`${name} instagram`)}`,
+  ];
 
-    const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(12000) });
-    if (!res.ok) return null;
+  for (const searchUrl of queries) {
+    try {
+      const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(searchUrl)}`;
+      const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(12000) });
+      if (!res.ok) continue;
 
-    const data = await res.json();
-    const html = data.contents || '';
+      const data = await res.json();
+      const html = data.contents || '';
 
-    // Extract all instagram.com/username patterns from result links
-    const matches = [...html.matchAll(/instagram\.com\/([a-zA-Z0-9._]{1,30})/g)];
-    const candidates = matches
-      .map(m => m[1].replace(/\/$/, ''))
-      .filter(u => u && !BLOCKED_PATHS.has(u.toLowerCase()));
+      // Bail out if we got a CAPTCHA / block page instead of results
+      if (html.length < 500 || html.includes('captcha') || html.includes('unusual traffic')) continue;
 
-    // Return the first unique candidate
-    const seen = new Set();
-    for (const c of candidates) {
-      if (!seen.has(c.toLowerCase())) return `@${c}`;
-      seen.add(c.toLowerCase());
+      const candidates = extractIgHandles(html);
+      const best = mostFrequent(candidates);
+      if (best) return `@${best}`;
+    } catch {
+      continue;
     }
-    return null;
-  } catch {
-    return null;
   }
+
+  return null;
 }
 
 const NICHES = [
