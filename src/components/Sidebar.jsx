@@ -1,4 +1,4 @@
-import { Search, FolderOpen, Plus, Trash2, Edit2, Check, X } from 'lucide-react';
+import { Search, Plus, Trash2, Edit2, Check, X, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
 import { useApp } from '../context/AppContext';
 
@@ -8,18 +8,14 @@ const CAMPAIGN_COLORS = [
 ];
 
 export default function Sidebar() {
-  const { campaigns, activePage, setActivePage, addCampaign, renameCampaign, deleteCampaign } = useApp();
+  const { campaigns, activePage, setActivePage, addCampaign, renameCampaign, deleteCampaign, influencers, loading, sync, lastSync } = useApp();
   const [editingId, setEditingId] = useState(null);
   const [editName, setEditName] = useState('');
   const [newCampaignName, setNewCampaignName] = useState('');
   const [showNewInput, setShowNewInput] = useState(false);
   const [pickedColor, setPickedColor] = useState(CAMPAIGN_COLORS[0]);
 
-  function startEdit(c) {
-    setEditingId(c.id);
-    setEditName(c.name);
-  }
-
+  function startEdit(c) { setEditingId(c.id); setEditName(c.name); }
   function confirmEdit() {
     if (editName.trim()) renameCampaign(editingId, editName.trim());
     setEditingId(null);
@@ -32,6 +28,14 @@ export default function Sidebar() {
     setNewCampaignName('');
     setPickedColor(CAMPAIGN_COLORS[0]);
     setShowNewInput(false);
+  }
+
+  function formatLastSync(date) {
+    if (!date) return null;
+    const diff = Math.round((Date.now() - date.getTime()) / 1000);
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 
   return (
@@ -60,13 +64,10 @@ export default function Sidebar() {
           Discover Influencers
         </button>
 
+        {/* Campaigns header */}
         <div className="mt-6 mb-2 px-3 flex items-center justify-between">
           <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Campaigns</span>
-          <button
-            onClick={() => setShowNewInput(true)}
-            className="text-gray-400 hover:text-purple-600 transition-colors"
-            title="New campaign"
-          >
+          <button onClick={() => setShowNewInput(true)} className="text-gray-400 hover:text-purple-600 transition-colors" title="New campaign">
             <Plus size={15} />
           </button>
         </div>
@@ -79,26 +80,20 @@ export default function Sidebar() {
               value={newCampaignName}
               onChange={e => setNewCampaignName(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') handleCreate(); if (e.key === 'Escape') setShowNewInput(false); }}
-              placeholder="Campaign name..."
+              placeholder="Campaign name…"
               className="w-full text-sm border border-purple-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-purple-200 mb-2"
             />
             <div className="flex gap-1 mb-2 flex-wrap">
               {CAMPAIGN_COLORS.map(c => (
-                <button
-                  key={c}
-                  onClick={() => setPickedColor(c)}
+                <button key={c} onClick={() => setPickedColor(c)}
                   className={`w-5 h-5 rounded-full transition-transform ${pickedColor === c ? 'scale-125 ring-2 ring-offset-1 ring-gray-400' : ''}`}
                   style={{ backgroundColor: c }}
                 />
               ))}
             </div>
             <div className="flex gap-2">
-              <button onClick={handleCreate} className="flex-1 text-xs bg-purple-600 text-white rounded-lg py-1.5 hover:bg-purple-700 transition-colors">
-                Create
-              </button>
-              <button onClick={() => setShowNewInput(false)} className="text-xs text-gray-500 px-2 hover:text-gray-700">
-                Cancel
-              </button>
+              <button onClick={handleCreate} className="flex-1 text-xs bg-purple-600 text-white rounded-lg py-1.5 hover:bg-purple-700 transition-colors">Create</button>
+              <button onClick={() => setShowNewInput(false)} className="text-xs text-gray-500 px-2 hover:text-gray-700">Cancel</button>
             </div>
           </div>
         )}
@@ -109,10 +104,7 @@ export default function Sidebar() {
             <div key={c.id} className="group relative">
               {editingId === c.id ? (
                 <div className="flex items-center gap-1 px-2 py-1.5">
-                  <input
-                    autoFocus
-                    value={editName}
-                    onChange={e => setEditName(e.target.value)}
+                  <input autoFocus value={editName} onChange={e => setEditName(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') confirmEdit(); if (e.key === 'Escape') setEditingId(null); }}
                     className="flex-1 text-sm border border-purple-300 rounded px-2 py-1 outline-none min-w-0"
                   />
@@ -131,34 +123,34 @@ export default function Sidebar() {
                   <span className="text-xs text-gray-400 flex-shrink-0">{c.influencerIds.length}</span>
                 </button>
               )}
-
               {editingId !== c.id && (
                 <div className="absolute right-2 top-1/2 -translate-y-1/2 hidden group-hover:flex items-center gap-0.5">
-                  <button
-                    onClick={e => { e.stopPropagation(); startEdit(c); }}
-                    className="p-1 text-gray-400 hover:text-gray-600 rounded"
-                  >
-                    <Edit2 size={11} />
-                  </button>
-                  <button
-                    onClick={e => { e.stopPropagation(); deleteCampaign(c.id); if (isActive) setActivePage('search'); }}
-                    className="p-1 text-gray-400 hover:text-red-500 rounded"
-                  >
-                    <Trash2 size={11} />
-                  </button>
+                  <button onClick={e => { e.stopPropagation(); startEdit(c); }} className="p-1 text-gray-400 hover:text-gray-600 rounded"><Edit2 size={11} /></button>
+                  <button onClick={e => { e.stopPropagation(); deleteCampaign(c.id); if (isActive) setActivePage('search'); }} className="p-1 text-gray-400 hover:text-red-500 rounded"><Trash2 size={11} /></button>
                 </div>
               )}
             </div>
           );
         })}
 
-        {campaigns.length === 0 && (
-          <p className="text-xs text-gray-400 px-3 mt-1">No campaigns yet</p>
-        )}
+        {campaigns.length === 0 && <p className="text-xs text-gray-400 px-3 mt-1">No campaigns yet</p>}
       </nav>
 
-      <div className="px-4 py-4 border-t border-gray-100">
-        <p className="text-xs text-gray-400">30 influencers indexed</p>
+      {/* Footer — sheet sync status */}
+      <div className="px-4 py-3 border-t border-gray-100">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs text-gray-500 font-medium">
+              {loading ? 'Syncing…' : `${influencers.length} influencer${influencers.length !== 1 ? 's' : ''}`}
+            </p>
+            {lastSync && !loading && (
+              <p className="text-xs text-gray-400">Synced {formatLastSync(lastSync)}</p>
+            )}
+          </div>
+          <button onClick={sync} disabled={loading} className="p-1.5 rounded-lg text-gray-400 hover:text-purple-600 hover:bg-purple-50 transition-colors disabled:opacity-40" title="Refresh sheet">
+            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+          </button>
+        </div>
       </div>
     </aside>
   );
