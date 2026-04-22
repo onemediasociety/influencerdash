@@ -154,11 +154,30 @@ export function useSheetInfluencers() {
       if (rows.length < 2) { setInfluencers([]); setLoading(false); return; }
 
       const colMap = buildColMap(rows[0]);
-      const data = rows
+      const raw = rows
         .slice(1)
         .filter(row => row.some(f => f))
         .map((row, i) => rowToInfluencer(row, colMap, i))
         .filter(inf => inf.handle); // skip completely blank rows
+
+      // Deduplicate by normalised handle — merge rows, preferring non-empty values
+      const seen = new Map();
+      for (const inf of raw) {
+        const key = inf.handle.toLowerCase().replace(/^@/, '');
+        if (!seen.has(key)) {
+          seen.set(key, { ...inf });
+        } else {
+          const existing = seen.get(key);
+          // For each field, keep whichever row has a value (existing wins ties)
+          for (const field of Object.keys(inf)) {
+            const val = inf[field];
+            const keep = existing[field];
+            const isEmpty = v => v === null || v === undefined || v === '' || v === 0;
+            if (isEmpty(keep) && !isEmpty(val)) existing[field] = val;
+          }
+        }
+      }
+      const data = Array.from(seen.values());
 
       setInfluencers(data);
       setLastSync(new Date());
