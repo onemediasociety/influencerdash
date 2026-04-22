@@ -87,7 +87,7 @@ function rowToInfluencer(row, colMap, index) {
 
   const igRaw = get('instagram');
   const { handle, url, username } = parseInstagram(igRaw);
-  const name = username ? handleToName(username) : `Influencer ${index + 1}`;
+  const name = get('name') || (username ? handleToName(username) : `Influencer ${index + 1}`);
   const followers = parseFollowers(get('followers'));
   const email = get('email');
   const { city, country } = parseLocation(get('location'));
@@ -127,7 +127,7 @@ function buildColMap(headers) {
   const map = {};
   headers.forEach((h, i) => {
     const lower = h.toLowerCase().trim();
-    // Check 'follower' before 'instagram' so "Instagram Followers" maps to followers, not instagram
+    if (lower === 'name' || lower === 'full name') map['name'] = i;
     if (lower.includes('follower')) map['followers'] = i;
     else if (lower.includes('instagram')) map['instagram'] = i;
     if (lower.includes('email')) map['email'] = i;
