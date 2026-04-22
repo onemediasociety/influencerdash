@@ -67,7 +67,7 @@ export default function InfluencerCard({ influencer, onClick }) {
             src={influencer.avatar}
             alt={influencer.name}
             className="w-12 h-12 rounded-full object-cover ring-2 ring-gray-100 flex-shrink-0 bg-gray-100"
-            onError={e => { e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(influencer.name)}&background=8b5cf6&color=fff&size=150`; }}
+            onError={e => { e.target.src = influencer.avatarFallback || `https://ui-avatars.com/api/?name=${encodeURIComponent(influencer.name)}&background=8b5cf6&color=fff&size=150`; }}
           />
           <div className="min-w-0 pr-8">
             <h3 className="font-semibold text-gray-900 text-sm leading-tight truncate">{influencer.name}</h3>

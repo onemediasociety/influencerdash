@@ -52,7 +52,7 @@ export default function InfluencerModal({ influencer, onClose }) {
                 src={influencer.avatar}
                 alt={influencer.name}
                 className="w-20 h-20 rounded-full ring-4 ring-white object-cover flex-shrink-0 bg-gray-100"
-                onError={e => { e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(influencer.name)}&background=8b5cf6&color=fff&size=150`; }}
+                onError={e => { e.target.src = influencer.avatarFallback || `https://ui-avatars.com/api/?name=${encodeURIComponent(influencer.name)}&background=8b5cf6&color=fff&size=150`; }}
               />
               <div className="mb-1 flex-1 min-w-0">
                 <h2 className="text-xl font-bold text-gray-900 truncate">{influencer.name}</h2>

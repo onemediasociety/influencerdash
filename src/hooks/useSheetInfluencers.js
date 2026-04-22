@@ -91,16 +91,23 @@ function rowToInfluencer(row, colMap, index) {
   const followers = parseFollowers(get('followers'));
   const email = get('email');
   const { city, country } = parseLocation(get('location'));
+  const industry = get('industry');
+
+  // Try Instagram profile photo via unavatar.io, fall back to letter avatar
+  const avatar = username
+    ? `https://unavatar.io/instagram/${username}`
+    : `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=8b5cf6&color=fff&size=150&bold=true`;
+  const avatarFallback = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=8b5cf6&color=fff&size=150&bold=true`;
 
   return {
     id: `sheet_${index}_${username || index}`,
     name,
     handle,
-    // letter-avatar that's stable per name
-    avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff&size=150&bold=true`,
+    avatar,
+    avatarFallback,
     country,
     city,
-    industry: '',
+    industry,
     bio: '',
     followers,
     engagement: null,
@@ -125,6 +132,7 @@ function buildColMap(headers) {
     else if (lower.includes('instagram')) map['instagram'] = i;
     if (lower.includes('email')) map['email'] = i;
     if (lower.includes('location') || lower.includes('city') || lower.includes('country')) map['location'] = i;
+    if (lower.includes('niche') || lower.includes('industry') || lower.includes('category')) map['industry'] = i;
   });
   return map;
 }

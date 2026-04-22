@@ -53,6 +53,7 @@ export default function SearchPage() {
   const [query, setQuery] = useState('');
   const [filterCountry, setFilterCountry] = useState('');
   const [filterCity, setFilterCity] = useState('');
+  const [filterIndustry, setFilterIndustry] = useState('');
   const [filterFollowers, setFilterFollowers] = useState('');
   const [sortBy, setSortBy] = useState('followers_desc');
   const [showFilters, setShowFilters] = useState(true);
@@ -62,19 +63,22 @@ export default function SearchPage() {
     [...new Set(influencers.map(i => i.country).filter(Boolean))].sort(), [influencers]);
   const cities = useMemo(() =>
     [...new Set(influencers.map(i => i.city).filter(Boolean))].sort(), [influencers]);
+  const industries = useMemo(() =>
+    [...new Set(influencers.map(i => i.industry).filter(Boolean))].sort(), [influencers]);
 
   const followerRange = FOLLOWER_RANGES.find(r => r.label === filterFollowers) || FOLLOWER_RANGES[0];
 
   const results = useMemo(() => {
     let list = influencers.filter(inf => {
       const q = query.toLowerCase();
-      const matchesQuery = !q || [inf.name, inf.handle, inf.city, inf.country, inf.email].some(
+      const matchesQuery = !q || [inf.name, inf.handle, inf.city, inf.country, inf.email, inf.industry].some(
         v => v && v.toLowerCase().includes(q)
       );
       const matchesCountry = !filterCountry || inf.country === filterCountry;
       const matchesCity = !filterCity || inf.city === filterCity;
+      const matchesIndustry = !filterIndustry || inf.industry === filterIndustry;
       const matchesFollowers = inf.followers >= followerRange.min && inf.followers <= followerRange.max;
-      return matchesQuery && matchesCountry && matchesCity && matchesFollowers;
+      return matchesQuery && matchesCountry && matchesCity && matchesIndustry && matchesFollowers;
     });
 
     return [...list].sort((a, b) => {
@@ -85,13 +89,14 @@ export default function SearchPage() {
         default: return 0;
       }
     });
-  }, [influencers, query, filterCountry, filterCity, followerRange, sortBy]);
+  }, [influencers, query, filterCountry, filterCity, filterIndustry, followerRange, sortBy]);
 
-  const activeFilters = [filterCountry, filterCity, filterFollowers].filter(Boolean);
+  const activeFilters = [filterCountry, filterCity, filterIndustry, filterFollowers].filter(Boolean);
 
   function clearFilters() {
     setFilterCountry('');
     setFilterCity('');
+    setFilterIndustry('');
     setFilterFollowers('');
   }
 
@@ -152,9 +157,12 @@ export default function SearchPage() {
         </div>
 
         {showFilters && (
-          <div className="mt-3 grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="mt-3 grid grid-cols-2 lg:grid-cols-5 gap-3">
             <Select value={filterCountry} onChange={setFilterCountry} options={countries} placeholder="All countries" />
             <Select value={filterCity} onChange={setFilterCity} options={cities} placeholder="All cities" />
+            {industries.length > 0 && (
+              <Select value={filterIndustry} onChange={setFilterIndustry} options={industries} placeholder="All niches" />
+            )}
             <Select
               value={filterFollowers}
               onChange={setFilterFollowers}
