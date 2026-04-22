@@ -32,7 +32,7 @@ export async function lookupInstagramHandle(name) {
   }
 }
 
-
+const NICHES = [
   { name: 'Fitness & Health', keywords: /fitness|workout|gym|health|nutrition|trainer|wellness|yoga|pilates|hiit|bodybuilding|crossfit/ },
   { name: 'Food & Cuisine', keywords: /food|recipe|chef|cook|cuisine|restaurant|baking|pastry|foodie|eating|dinner|brunch|bbq/ },
   { name: 'Travel', keywords: /travel|explore|wanderlust|adventure|hotel|destination|nomad|backpack|trip|vacation|tourist/ },
