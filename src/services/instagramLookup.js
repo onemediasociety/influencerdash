@@ -49,6 +49,7 @@ export async function lookupInstagramProfile(input) {
     handle: `@${username}`,
     name: usernameToName(username),
     followers: 0,
+    engagement: null,
     email: '',
     location: '',
     niche: '',
@@ -82,6 +83,20 @@ export async function lookupInstagramProfile(input) {
       result.email = extractEmail(bio);
       result.location = extractLocation(bio);
       result.niche = classifyNiche(`${categoryMatch ? categoryMatch[1] : ''} ${bio} ${username}`);
+
+      // Best-effort engagement rate from recent post likes + comments
+      if (result.followers > 0) {
+        const likesMatches = [...html.matchAll(/"edge_liked_by":\{"count":(\d+)\}/g)].slice(0, 12);
+        const commentsMatches = [...html.matchAll(/"edge_media_to_comment":\{"count":(\d+)\}/g)].slice(0, 12);
+        if (likesMatches.length >= 3) {
+          const avgLikes = likesMatches.reduce((s, m) => s + parseInt(m[1]), 0) / likesMatches.length;
+          const avgComments = commentsMatches.length > 0
+            ? commentsMatches.reduce((s, m) => s + parseInt(m[1]), 0) / commentsMatches.length
+            : 0;
+          const rate = (avgLikes + avgComments) / result.followers * 100;
+          if (rate > 0 && rate < 100) result.engagement = parseFloat(rate.toFixed(2));
+        }
+      }
     }
   } catch {
     // Proxy failed — return best-effort result from username alone

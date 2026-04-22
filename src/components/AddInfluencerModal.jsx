@@ -143,6 +143,16 @@ export default function AddInfluencerModal({ onClose }) {
                 <Field label="Niche" value={profile.niche} onChange={v => setProfile(p => ({ ...p, niche: v }))} />
                 <Field label="Location" value={profile.location} onChange={v => setProfile(p => ({ ...p, location: v }))} />
                 <Field label="Email" value={profile.email} onChange={v => setProfile(p => ({ ...p, email: v }))} />
+                <Field
+                  label="Followers"
+                  value={profile.followers > 0 ? String(profile.followers) : ''}
+                  onChange={v => setProfile(p => ({ ...p, followers: parseInt(v.replace(/,/g, '')) || 0 }))}
+                />
+                <Field
+                  label="Engagement Rate (%)"
+                  value={profile.engagement != null ? String(profile.engagement) : ''}
+                  onChange={v => setProfile(p => ({ ...p, engagement: parseFloat(v) || null }))}
+                />
               </div>
 
               <div className="flex gap-2 pt-1">

@@ -316,6 +316,8 @@ function rowToInfluencer(row, colMap, index) {
   const email = get('email');
   const { city, country } = parseLocation(get('location'));
   const industry = get('industry');
+  const engagementRaw = get('engagement');
+  const engagement = engagementRaw ? (parseFloat(engagementRaw.replace('%', '')) || null) : null;
 
   // Try Instagram profile photo via unavatar.io, fall back to letter avatar
   const avatar = username
@@ -334,7 +336,7 @@ function rowToInfluencer(row, colMap, index) {
     industry,
     bio: '',
     followers,
-    engagement: null,
+    engagement,
     platforms: ['Instagram'],
     email,
     website: url,
@@ -360,6 +362,7 @@ function buildColMap(headers) {
     if (lower.includes('email')) set('email', i);
     if (lower.includes('location') || lower.includes('city') || lower.includes('country')) set('location', i);
     if (lower.includes('niche') || lower.includes('industry') || lower.includes('category')) set('industry', i);
+    if (lower.includes('engagement') || lower === 'er' || lower === 'eng rate') set('engagement', i);
   });
   return map;
 }
