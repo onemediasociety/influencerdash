@@ -349,14 +349,17 @@ function rowToInfluencer(row, colMap, index) {
 
 function buildColMap(headers) {
   const map = {};
+  const set = (key, i) => { if (map[key] === undefined) map[key] = i; }; // first match wins
+
   headers.forEach((h, i) => {
     const lower = h.toLowerCase().trim();
-    if (lower === 'name' || lower === 'full name') map['name'] = i;
-    if (lower.includes('follower')) map['followers'] = i;
-    else if (lower.includes('instagram')) map['instagram'] = i;
-    if (lower.includes('email')) map['email'] = i;
-    if (lower.includes('location') || lower.includes('city') || lower.includes('country')) map['location'] = i;
-    if (lower.includes('niche') || lower.includes('industry') || lower.includes('category')) map['industry'] = i;
+    if (lower === 'name' || lower === 'full name') set('name', i);
+    // 'follower' check before 'instagram' so "Instagram Followers" goes to followers not instagram
+    if (lower.includes('follower') || lower === 'followers') set('followers', i);
+    else if (lower.includes('instagram') || lower === 'ig') set('instagram', i);
+    if (lower.includes('email')) set('email', i);
+    if (lower.includes('location') || lower.includes('city') || lower.includes('country')) set('location', i);
+    if (lower.includes('niche') || lower.includes('industry') || lower.includes('category')) set('industry', i);
   });
   return map;
 }
