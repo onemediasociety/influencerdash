@@ -50,9 +50,13 @@ function parseFollowers(str) {
   return parseInt(s, 10) || 0;
 }
 
+function toTitleCase(s) {
+  return s.replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+}
+
 function parseLocation(str) {
   if (!str) return { city: '', country: '' };
-  const parts = str.split(',').map(p => p.trim()).filter(Boolean);
+  const parts = str.split(',').map(p => toTitleCase(p.trim())).filter(Boolean);
   if (parts.length >= 2) return { city: parts[0], country: parts[parts.length - 1] };
   return { city: parts[0] || '', country: parts[0] || '' };
 }
