@@ -15,6 +15,24 @@ function mostFrequent(candidates) {
   return candidates.find(c => c.toLowerCase() === topKey) || null;
 }
 
+// Parse "1.2M", "12.5K", "1,234,567" → integer
+function parseFollowerStr(s) {
+  const clean = s.replace(/,/g, '').trim();
+  const m = clean.match(/^([\d.]+)\s*([KMBkmb])?$/);
+  if (!m) return 0;
+  const n = parseFloat(m[1]);
+  const mult = { k: 1_000, m: 1_000_000, b: 1_000_000_000 }[m[2]?.toLowerCase()] || 1;
+  return Math.round(n * mult);
+}
+
+// Instagram's meta description indexed by DuckDuckGo:
+// "1.2M Followers, 456 Following, 789 Posts - See Instagram photos..."
+function extractFollowersFromHtml(html) {
+  const m = html.match(/([\d,.]+\s*[KMBkmb]?)\s*[Ff]ollowers[,\s]/);
+  return m ? parseFollowerStr(m[1].trim()) : 0;
+}
+
+// Returns { handle: '@username', followers: <number> } or null
 export async function lookupInstagramHandle(name) {
   if (!name) return null;
 
@@ -34,12 +52,13 @@ export async function lookupInstagramHandle(name) {
       const data = await res.json();
       const html = data.contents || '';
 
-      // Bail out if we got a CAPTCHA / block page instead of results
       if (html.length < 500 || html.includes('captcha') || html.includes('unusual traffic')) continue;
 
       const candidates = extractIgHandles(html);
       const best = mostFrequent(candidates);
-      if (best) return `@${best}`;
+      if (best) {
+        return { handle: `@${best}`, followers: extractFollowersFromHtml(html) };
+      }
     } catch {
       continue;
     }

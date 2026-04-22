@@ -36,31 +36,34 @@ export default function InstagramFinder() {
 
       for (const { rowNum, name, current } of toFind) {
         setProgress(p => ({ ...p, current: name }));
-        const handle = await lookupInstagramHandle(name);
-        if (handle) {
+        const result = await lookupInstagramHandle(name);
+        if (result) {
+          const { handle, followers: searchFollowers } = result;
           const username = handle.replace(/^@/, '');
           const igUrl = `https://www.instagram.com/${username}/`;
 
-          // Start with handle + URL
           const updates = [{ range: `${cols.ig}${rowNum}`, value: handle }];
           if (cols.website) updates.push({ range: `${cols.website}${rowNum}`, value: igUrl });
 
-          // Fetch full profile to get followers and fill in any empty fields
+          // Also fetch the full IG profile page for extra data.
+          // Use the search-snippet followers as a reliable fallback when the
+          // profile page is blocked (which Instagram does frequently).
+          let profileFollowers = 0;
           try {
             const profile = await lookupInstagramProfile(username);
-            if (profile.followers > 0 && cols.followers) {
-              updates.push({ range: `${cols.followers}${rowNum}`, value: String(profile.followers) });
-            }
-            if (profile.email && !current.email && cols.email) {
+            profileFollowers = profile.followers || 0;
+            if (profile.email && !current.email && cols.email)
               updates.push({ range: `${cols.email}${rowNum}`, value: profile.email });
-            }
-            if (profile.location && !current.location && cols.location) {
+            if (profile.location && !current.location && cols.location)
               updates.push({ range: `${cols.location}${rowNum}`, value: profile.location });
-            }
-            if (profile.niche && !current.niche && cols.niche) {
+            if (profile.niche && !current.niche && cols.niche)
               updates.push({ range: `${cols.niche}${rowNum}`, value: profile.niche });
-            }
-          } catch { /* profile fetch failed — still save the handle */ }
+          } catch { /* profile page blocked — proceed with search data */ }
+
+          // Prefer the scraped page count; fall back to the search-snippet count
+          const followers = profileFollowers > 0 ? profileFollowers : searchFollowers;
+          if (followers > 0 && cols.followers)
+            updates.push({ range: `${cols.followers}${rowNum}`, value: String(followers) });
 
           await writeNiches(accessToken, updates);
           savedCount++;
