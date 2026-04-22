@@ -390,22 +390,24 @@ export function useSheetInfluencers() {
         .map((row, i) => rowToInfluencer(row, colMap, i))
         .filter(inf => inf.name || inf.handle); // keep any row that has at least a name
 
-      // Deduplicate:
-      //   - by handle (exact match, both non-empty)
-      //   - by full name (only when name has ≥2 words, to avoid merging two different "Maria"s)
+      // Deduplicate by handle OR name, merging rows and keeping first non-empty value.
       const isEmpty = v => v === null || v === undefined || v === '' || v === 0;
-      const normalise = s => (s || '').toLowerCase().replace(/^@/, '').trim();
-      const isFullName = s => s.trim().includes(' ');
+      const normHandle = s => (s || '').toLowerCase().replace(/^@/, '').trim();
+      // Normalize name: lowercase, trim, collapse spaces — so "Maria Garcia" matches
+      // a handle-derived name like "Mariagarcia" from @mariagarcia.
+      const normName = s => (s || '').toLowerCase().trim().replace(/\s+/g, '');
 
       const merged = [];
       for (const inf of raw) {
-        const infHandle = normalise(inf.handle);
-        const infName = normalise(inf.name);
+        const infHandle = normHandle(inf.handle);
+        const infName = normName(inf.name);
         const existing = merged.find(m => {
-          const mHandle = normalise(m.handle);
-          const mName = normalise(m.name);
+          const mHandle = normHandle(m.handle);
+          const mName = normName(m.name);
+          // Same handle (primary signal)
           if (infHandle && mHandle && infHandle === mHandle) return true;
-          if (infName && mName && isFullName(inf.name) && isFullName(m.name) && infName === mName) return true;
+          // Same name after space-collapse, guard against very short/generic names
+          if (infName && mName && infName.length >= 5 && infName === mName) return true;
           return false;
         });
         if (!existing) {
