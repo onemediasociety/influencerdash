@@ -3,6 +3,7 @@ import { useGoogleLogin } from '@react-oauth/google';
 import { Search, CheckCircle, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { lookupInstagramHandle } from '../services/nicheResearch';
+import { lookupInstagramProfile } from '../services/instagramLookup';
 import { buildInstagramUpdates, writeNiches } from '../services/sheetsApi';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -27,21 +28,40 @@ export default function InstagramFinder() {
     setError('');
     let savedCount = 0;
     try {
-      const { toFind, igLetter, websiteLetter } = await buildInstagramUpdates(accessToken);
+      const { toFind, cols } = await buildInstagramUpdates(accessToken);
       setTotalSearched(toFind.length);
       setProgress({ done: 0, total: toFind.length, current: '', found: 0 });
 
       if (toFind.length === 0) { setStatus('done'); setFilled(0); return; }
 
-      for (const { rowNum, name } of toFind) {
+      for (const { rowNum, name, current } of toFind) {
         setProgress(p => ({ ...p, current: name }));
         const handle = await lookupInstagramHandle(name);
         if (handle) {
           const username = handle.replace(/^@/, '');
-          const updates = [{ range: `${igLetter}${rowNum}`, value: handle }];
-          if (websiteLetter) {
-            updates.push({ range: `${websiteLetter}${rowNum}`, value: `https://www.instagram.com/${username}/` });
-          }
+          const igUrl = `https://www.instagram.com/${username}/`;
+
+          // Start with handle + URL
+          const updates = [{ range: `${cols.ig}${rowNum}`, value: handle }];
+          if (cols.website) updates.push({ range: `${cols.website}${rowNum}`, value: igUrl });
+
+          // Fetch full profile to get followers and fill in any empty fields
+          try {
+            const profile = await lookupInstagramProfile(username);
+            if (profile.followers > 0 && cols.followers) {
+              updates.push({ range: `${cols.followers}${rowNum}`, value: String(profile.followers) });
+            }
+            if (profile.email && !current.email && cols.email) {
+              updates.push({ range: `${cols.email}${rowNum}`, value: profile.email });
+            }
+            if (profile.location && !current.location && cols.location) {
+              updates.push({ range: `${cols.location}${rowNum}`, value: profile.location });
+            }
+            if (profile.niche && !current.niche && cols.niche) {
+              updates.push({ range: `${cols.niche}${rowNum}`, value: profile.niche });
+            }
+          } catch { /* profile fetch failed — still save the handle */ }
+
           await writeNiches(accessToken, updates);
           savedCount++;
         }

@@ -63,24 +63,42 @@ export async function buildInstagramUpdates(accessToken) {
   if (!values || values.length < 2) throw new Error('Sheet appears to be empty');
 
   const headers = values[0].map(h => h.toLowerCase().trim());
-  const nameCol = headers.findIndex(h => h === 'name' || h === 'full name');
-  const igCol = headers.findIndex(h => h.includes('instagram') && !h.includes('follower'));
+  const nameCol    = headers.findIndex(h => h === 'name' || h === 'full name');
+  const igCol      = headers.findIndex(h => h.includes('instagram') && !h.includes('follower'));
+  const followCol  = headers.findIndex(h => h.includes('follower'));
+  const emailCol   = headers.findIndex(h => h.includes('email'));
+  const locCol     = headers.findIndex(h => h.includes('location') || h.includes('city') || h.includes('country'));
+  const nicheCol   = headers.findIndex(h => h.includes('niche') || h.includes('industry') || h.includes('category'));
   const websiteCol = findWebsiteCol(headers);
 
   if (nameCol === -1) throw new Error('No Name column found in the sheet.');
   if (igCol === -1) throw new Error('No Instagram column found in the sheet.');
 
-  const igLetter      = colToLetter(igCol);
-  const websiteLetter = websiteCol >= 0 ? colToLetter(websiteCol) : null;
+  const cols = {
+    ig:       colToLetter(igCol),
+    website:  websiteCol >= 0 ? colToLetter(websiteCol) : null,
+    followers: followCol >= 0 ? colToLetter(followCol)  : null,
+    email:    emailCol   >= 0 ? colToLetter(emailCol)   : null,
+    location: locCol     >= 0 ? colToLetter(locCol)     : null,
+    niche:    nicheCol   >= 0 ? colToLetter(nicheCol)   : null,
+  };
 
   const toFind = [];
   values.slice(1).forEach((row, i) => {
     const name = (row[nameCol] || '').trim();
-    const ig = (row[igCol] || '').trim();
-    if (name && !ig) toFind.push({ rowNum: i + 2, name });
+    const ig   = (row[igCol]   || '').trim();
+    if (name && !ig) toFind.push({
+      rowNum: i + 2,
+      name,
+      current: {
+        email:    (row[emailCol]  || '').trim(),
+        location: (row[locCol]    || '').trim(),
+        niche:    (row[nicheCol]  || '').trim(),
+      },
+    });
   });
 
-  return { toFind, igLetter, websiteLetter };
+  return { toFind, cols };
 }
 
 export async function appendInfluencerRow(accessToken, profile) {
