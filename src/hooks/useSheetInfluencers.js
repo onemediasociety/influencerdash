@@ -388,20 +388,26 @@ export function useSheetInfluencers() {
         .slice(1)
         .filter(row => row.some(f => f))
         .map((row, i) => rowToInfluencer(row, colMap, i))
-        .filter(inf => inf.handle); // skip completely blank rows
+        .filter(inf => inf.name || inf.handle); // keep any row that has at least a name
 
-      // Deduplicate by handle OR name — merge rows, preferring non-empty values
+      // Deduplicate:
+      //   - by handle (exact match, both non-empty)
+      //   - by full name (only when name has ≥2 words, to avoid merging two different "Maria"s)
       const isEmpty = v => v === null || v === undefined || v === '' || v === 0;
       const normalise = s => (s || '').toLowerCase().replace(/^@/, '').trim();
+      const isFullName = s => s.trim().includes(' ');
 
       const merged = [];
       for (const inf of raw) {
         const infHandle = normalise(inf.handle);
         const infName = normalise(inf.name);
-        const existing = merged.find(m =>
-          (infHandle && normalise(m.handle) === infHandle) ||
-          (infName && normalise(m.name) === infName)
-        );
+        const existing = merged.find(m => {
+          const mHandle = normalise(m.handle);
+          const mName = normalise(m.name);
+          if (infHandle && mHandle && infHandle === mHandle) return true;
+          if (infName && mName && isFullName(inf.name) && isFullName(m.name) && infName === mName) return true;
+          return false;
+        });
         if (!existing) {
           merged.push({ ...inf });
         } else {
