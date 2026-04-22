@@ -119,9 +119,10 @@ function rowToInfluencer(row, colMap, index) {
 function buildColMap(headers) {
   const map = {};
   headers.forEach((h, i) => {
-    const lower = h.toLowerCase();
-    if (lower.includes('instagram')) map['instagram'] = i;
+    const lower = h.toLowerCase().trim();
+    // Check 'follower' before 'instagram' so "Instagram Followers" maps to followers, not instagram
     if (lower.includes('follower')) map['followers'] = i;
+    else if (lower.includes('instagram')) map['instagram'] = i;
     if (lower.includes('email')) map['email'] = i;
     if (lower.includes('location') || lower.includes('city') || lower.includes('country')) map['location'] = i;
   });
