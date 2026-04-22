@@ -71,7 +71,19 @@ export default function InfluencerCard({ influencer, onClick }) {
           />
           <div className="min-w-0 pr-8">
             <h3 className="font-semibold text-gray-900 text-sm leading-tight truncate">{influencer.name}</h3>
-            <p className="text-purple-500 text-xs truncate">{influencer.handle}</p>
+            {influencer.instagramUrl ? (
+              <a
+                href={influencer.instagramUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={e => e.stopPropagation()}
+                className="text-purple-500 text-xs truncate hover:text-purple-700 hover:underline"
+              >
+                {influencer.handle}
+              </a>
+            ) : (
+              <p className="text-purple-500 text-xs truncate">{influencer.handle}</p>
+            )}
             {(influencer.city || influencer.country) && (
               <div className="flex items-center gap-1 mt-1 text-xs text-gray-500">
                 <MapPin size={11} className="flex-shrink-0" />
