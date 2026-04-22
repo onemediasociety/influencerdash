@@ -41,7 +41,59 @@ function parseCSV(text) {
   return rows;
 }
 
-function parseFollowers(str) {
+// Aliases / abbreviations → canonical city name
+const CITY_ALIASES = {
+  // New York
+  'Nyc':'New York','N.Y.C.':'New York','New York City':'New York','Ny':'New York',
+  // Los Angeles
+  'La':'Los Angeles','L.A.':'Los Angeles','Los Angeles Ca':'Los Angeles',
+  // San Francisco
+  'Sf':'San Francisco','Sfo':'San Francisco','San Fran':'San Francisco','The Bay':'San Francisco',
+  // Washington DC
+  'Dc':'Washington','D.C.':'Washington','Washington Dc':'Washington','Washington D.C.':'Washington',
+  // Fort Lauderdale
+  'Ftl':'Fort Lauderdale','Ft Lauderdale':'Fort Lauderdale','Ft. Lauderdale':'Fort Lauderdale',
+  // Other Florida
+  'Mia':'Miami','Orl':'Orlando','Tpa':'Tampa','Jax':'Jacksonville',
+  // Texas
+  'Dfw':'Dallas','Dal':'Dallas','Hou':'Houston','H-Town':'Houston','Aus':'Austin','Sat':'San Antonio',
+  // Georgia
+  'Atl':'Atlanta',
+  // Illinois
+  'Chi':'Chicago','Chitown':'Chicago','Chi-Town':'Chicago',
+  // Pennsylvania
+  'Philly':'Philadelphia','Phl':'Philadelphia',
+  // Nevada
+  'Vegas':'Las Vegas','Lv':'Las Vegas','Lvn':'Las Vegas',
+  // Louisiana
+  'Nola':'New Orleans',
+  // Tennessee
+  'Nash':'Nashville','Nas':'Nashville',
+  // New York boroughs
+  'Bklyn':'Brooklyn','Bk':'Brooklyn','Bx':'Bronx',
+  // California cities
+  'Sd':'San Diego','Lb':'Long Beach','Sb':'Santa Barbara',
+  'Sac':'Sacramento','Oak':'Oakland',
+  // Pacific Northwest
+  'Pdx':'Portland','Sea':'Seattle',
+  // Colorado
+  'Den':'Denver',
+  // Arizona
+  'Phx':'Phoenix',
+  // Massachusetts
+  'Bos':'Boston',
+  // North Carolina
+  'Clt':'Charlotte','Rdu':'Raleigh',
+  // Canada
+  'Van':'Vancouver','Mtl':'Montreal','Yyc':'Calgary','Yow':'Ottawa','Yyz':'Toronto',
+  // UK
+  'Ldn':'London','Mcr':'Manchester','Brum':'Birmingham',
+  // International
+  'Cdmx':'Mexico City','Sp':'São Paulo','Rj':'Rio De Janeiro','Bsas':'Buenos Aires',
+  'Kl':'Kuala Lumpur',
+};
+
+
   if (!str) return 0;
   const s = str.trim().replace(/,/g, '').replace(/\s/g, '');
   if (/k$/i.test(s)) return Math.round(parseFloat(s) * 1_000);
@@ -171,17 +223,30 @@ const CITY_COUNTRY = {
   'Havana':'Cuba','Santo Domingo':'Dominican Republic','San Juan':'USA',
 };
 
+function resolveAlias(s) {
+  const key = toTitleCase(s.trim());
+  return CITY_ALIASES[key] || key;
+}
+
 function parseLocation(str) {
   if (!str) return { city: '', country: '' };
-  const parts = str.split(',').map(p => toTitleCase(p.trim())).filter(Boolean);
 
-  let city = parts[0] || '';
-  let country = parts.length >= 2 ? parts[parts.length - 1] : '';
+  // Split on comma first to separate city from country/state
+  const commaParts = str.split(',').map(p => p.trim()).filter(Boolean);
 
-  // If second part is a US state name/abbreviation, country = USA
-  if (country && US_STATES.has(toTitleCase(country))) country = 'USA';
+  // Within the city portion, handle dash-separated formats like "Miami - FTL" or "NYC/LA"
+  // Take the last segment as the most specific city
+  const cityRaw = commaParts[0] || '';
+  const dashParts = cityRaw.split(/\s*[-\/]\s*/).map(p => p.trim()).filter(Boolean);
+  const citySegment = dashParts.length > 1 ? dashParts[dashParts.length - 1] : dashParts[0] || '';
 
-  // If only one part or country still blank, look up city
+  let city = resolveAlias(toTitleCase(citySegment));
+  let country = commaParts.length >= 2 ? toTitleCase(commaParts[commaParts.length - 1]) : '';
+
+  // Normalise US state → USA
+  if (country && US_STATES.has(country)) country = 'USA';
+
+  // Look up country from city if still missing
   if (!country && city) country = CITY_COUNTRY[city] || '';
 
   return { city, country };
