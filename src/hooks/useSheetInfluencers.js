@@ -94,6 +94,7 @@ const CITY_ALIASES = {
 };
 
 
+function parseFollowers(str) {
   if (!str) return 0;
   const s = str.trim().replace(/,/g, '').replace(/\s/g, '');
   if (/k$/i.test(s)) return Math.round(parseFloat(s) * 1_000);
