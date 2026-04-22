@@ -54,11 +54,137 @@ function toTitleCase(s) {
   return s.replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
 }
 
+const US_STATES = new Set([
+  'Alabama','Alaska','Arizona','Arkansas','California','Colorado','Connecticut',
+  'Delaware','Florida','Georgia','Hawaii','Idaho','Illinois','Indiana','Iowa',
+  'Kansas','Kentucky','Louisiana','Maine','Maryland','Massachusetts','Michigan',
+  'Minnesota','Mississippi','Missouri','Montana','Nebraska','Nevada',
+  'New Hampshire','New Jersey','New Mexico','New York','North Carolina',
+  'North Dakota','Ohio','Oklahoma','Oregon','Pennsylvania','Rhode Island',
+  'South Carolina','South Dakota','Tennessee','Texas','Utah','Vermont',
+  'Virginia','Washington','West Virginia','Wisconsin','Wyoming',
+  'District Of Columbia','Dc',
+  // abbreviations
+  'Al','Ak','Az','Ar','Ca','Co','Ct','De','Fl','Ga','Hi','Id','Il','In','Ia',
+  'Ks','Ky','La','Me','Md','Ma','Mi','Mn','Ms','Mo','Mt','Ne','Nv','Nh','Nj',
+  'Nm','Ny','Nc','Nd','Oh','Ok','Or','Pa','Ri','Sc','Sd','Tn','Tx','Ut','Vt',
+  'Va','Wa','Wv','Wi','Wy','Dc',
+]);
+
+const CITY_COUNTRY = {
+  // USA
+  'New York':'USA','Los Angeles':'USA','Miami':'USA','Chicago':'USA',
+  'Houston':'USA','Atlanta':'USA','Dallas':'USA','San Francisco':'USA',
+  'Seattle':'USA','Boston':'USA','Washington':'USA','Las Vegas':'USA',
+  'Denver':'USA','Austin':'USA','Nashville':'USA','Phoenix':'USA',
+  'Philadelphia':'USA','Portland':'USA','Minneapolis':'USA','Detroit':'USA',
+  'San Diego':'USA','Tampa':'USA','Orlando':'USA','Charlotte':'USA',
+  'Brooklyn':'USA','Manhattan':'USA','Bronx':'USA','Queens':'USA',
+  'Beverly Hills':'USA','Malibu':'USA','Scottsdale':'USA','Salt Lake City':'USA',
+  'New Orleans':'USA','Kansas City':'USA','Columbus':'USA','Indianapolis':'USA',
+  'San Jose':'USA','Jacksonville':'USA','Memphis':'USA','Baltimore':'USA',
+  'Louisville':'USA','Milwaukee':'USA','Albuquerque':'USA','Tucson':'USA',
+  'Fresno':'USA','Sacramento':'USA','Oakland':'USA','Raleigh':'USA',
+  'Colorado Springs':'USA','Long Beach':'USA','Virginia Beach':'USA',
+  'Omaha':'USA','Tulsa':'USA','Arlington':'USA','Tampa':'USA',
+  // Canada
+  'Toronto':'Canada','Vancouver':'Canada','Montreal':'Canada','Calgary':'Canada',
+  'Edmonton':'Canada','Ottawa':'Canada','Winnipeg':'Canada','Quebec City':'Canada',
+  // UK
+  'London':'UK','Manchester':'UK','Birmingham':'UK','Edinburgh':'UK',
+  'Glasgow':'UK','Bristol':'UK','Leeds':'UK','Liverpool':'UK','Sheffield':'UK',
+  'Newcastle':'UK','Nottingham':'UK','Cardiff':'UK','Belfast':'UK',
+  // Europe
+  'Paris':'France','Lyon':'France','Marseille':'France','Nice':'France','Bordeaux':'France',
+  'Berlin':'Germany','Munich':'Germany','Hamburg':'Germany','Frankfurt':'Germany','Cologne':'Germany',
+  'Madrid':'Spain','Barcelona':'Spain','Seville':'Spain','Valencia':'Spain','Bilbao':'Spain',
+  'Rome':'Italy','Milan':'Italy','Naples':'Italy','Turin':'Italy','Florence':'Italy',
+  'Amsterdam':'Netherlands','Rotterdam':'Netherlands','The Hague':'Netherlands',
+  'Brussels':'Belgium','Antwerp':'Belgium',
+  'Zurich':'Switzerland','Geneva':'Switzerland','Bern':'Switzerland',
+  'Vienna':'Austria','Graz':'Austria',
+  'Stockholm':'Sweden','Gothenburg':'Sweden','Malmö':'Sweden',
+  'Oslo':'Norway','Bergen':'Norway',
+  'Copenhagen':'Denmark','Aarhus':'Denmark',
+  'Helsinki':'Finland','Tampere':'Finland',
+  'Dublin':'Ireland','Cork':'Ireland',
+  'Lisbon':'Portugal','Porto':'Portugal',
+  'Athens':'Greece','Thessaloniki':'Greece',
+  'Warsaw':'Poland','Krakow':'Poland','Wroclaw':'Poland',
+  'Prague':'Czech Republic',
+  'Budapest':'Hungary',
+  'Bucharest':'Romania',
+  'Moscow':'Russia','Saint Petersburg':'Russia',
+  'Kyiv':'Ukraine',
+  'Istanbul':'Turkey','Ankara':'Turkey',
+  // Middle East
+  'Dubai':'UAE','Abu Dhabi':'UAE','Sharjah':'UAE',
+  'Riyadh':'Saudi Arabia','Jeddah':'Saudi Arabia','Mecca':'Saudi Arabia',
+  'Doha':'Qatar','Kuwait City':'Kuwait','Manama':'Bahrain','Muscat':'Oman',
+  'Beirut':'Lebanon','Amman':'Jordan','Tel Aviv':'Israel','Jerusalem':'Israel',
+  'Tehran':'Iran','Baghdad':'Iraq',
+  // Africa
+  'Cairo':'Egypt','Alexandria':'Egypt',
+  'Lagos':'Nigeria','Abuja':'Nigeria',
+  'Nairobi':'Kenya','Mombasa':'Kenya',
+  'Johannesburg':'South Africa','Cape Town':'South Africa','Durban':'South Africa',
+  'Accra':'Ghana','Kumasi':'Ghana',
+  'Casablanca':'Morocco','Rabat':'Morocco','Marrakech':'Morocco',
+  'Tunis':'Tunisia','Algiers':'Algeria','Tripoli':'Libya',
+  'Addis Ababa':'Ethiopia','Dar Es Salaam':'Tanzania','Kampala':'Uganda',
+  'Dakar':'Senegal','Abidjan':'Ivory Coast','Luanda':'Angola',
+  'Khartoum':'Sudan','Harare':'Zimbabwe','Lusaka':'Zambia',
+  // Asia
+  'Tokyo':'Japan','Osaka':'Japan','Kyoto':'Japan','Yokohama':'Japan','Sapporo':'Japan',
+  'Seoul':'South Korea','Busan':'South Korea','Incheon':'South Korea',
+  'Beijing':'China','Shanghai':'China','Guangzhou':'China','Shenzhen':'China',
+  'Chengdu':'China','Wuhan':'China','Hangzhou':'China','Xi\'An':'China',
+  'Hong Kong':'Hong Kong','Macau':'Macau',
+  'Singapore':'Singapore',
+  'Bangkok':'Thailand','Chiang Mai':'Thailand','Phuket':'Thailand',
+  'Kuala Lumpur':'Malaysia','Penang':'Malaysia',
+  'Jakarta':'Indonesia','Bali':'Indonesia','Surabaya':'Indonesia',
+  'Manila':'Philippines','Cebu':'Philippines',
+  'Taipei':'Taiwan','Kaohsiung':'Taiwan',
+  'Mumbai':'India','Delhi':'India','New Delhi':'India','Bangalore':'India',
+  'Chennai':'India','Hyderabad':'India','Kolkata':'India','Pune':'India',
+  'Ahmedabad':'India','Jaipur':'India','Surat':'India','Lucknow':'India',
+  'Karachi':'Pakistan','Lahore':'Pakistan','Islamabad':'Pakistan',
+  'Dhaka':'Bangladesh','Colombo':'Sri Lanka','Kathmandu':'Nepal',
+  'Yangon':'Myanmar','Phnom Penh':'Cambodia','Ho Chi Minh City':'Vietnam',
+  'Hanoi':'Vietnam','Vientiane':'Laos',
+  // Oceania
+  'Sydney':'Australia','Melbourne':'Australia','Brisbane':'Australia',
+  'Perth':'Australia','Adelaide':'Australia','Gold Coast':'Australia',
+  'Auckland':'New Zealand','Wellington':'New Zealand','Christchurch':'New Zealand',
+  // Latin America
+  'Mexico City':'Mexico','Guadalajara':'Mexico','Monterrey':'Mexico','Cancun':'Mexico',
+  'São Paulo':'Brazil','Rio De Janeiro':'Brazil','Brasília':'Brazil','Salvador':'Brazil',
+  'Belo Horizonte':'Brazil','Fortaleza':'Brazil','Manaus':'Brazil','Curitiba':'Brazil',
+  'Buenos Aires':'Argentina','Córdoba':'Argentina','Rosario':'Argentina',
+  'Bogotá':'Colombia','Medellín':'Colombia','Cali':'Colombia','Cartagena':'Colombia',
+  'Lima':'Peru','Cusco':'Peru',
+  'Santiago':'Chile','Valparaíso':'Chile',
+  'Caracas':'Venezuela','Quito':'Ecuador','La Paz':'Bolivia',
+  'Montevideo':'Uruguay','Asunción':'Paraguay',
+  'Panama City':'Panama','San José':'Costa Rica','Guatemala City':'Guatemala',
+  'Havana':'Cuba','Santo Domingo':'Dominican Republic','San Juan':'USA',
+};
+
 function parseLocation(str) {
   if (!str) return { city: '', country: '' };
   const parts = str.split(',').map(p => toTitleCase(p.trim())).filter(Boolean);
-  if (parts.length >= 2) return { city: parts[0], country: parts[parts.length - 1] };
-  return { city: parts[0] || '', country: parts[0] || '' };
+
+  let city = parts[0] || '';
+  let country = parts.length >= 2 ? parts[parts.length - 1] : '';
+
+  // If second part is a US state name/abbreviation, country = USA
+  if (country && US_STATES.has(toTitleCase(country))) country = 'USA';
+
+  // If only one part or country still blank, look up city
+  if (!country && city) country = CITY_COUNTRY[city] || '';
+
+  return { city, country };
 }
 
 function parseInstagram(str) {
