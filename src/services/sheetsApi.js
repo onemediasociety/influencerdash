@@ -70,6 +70,42 @@ export async function buildInstagramUpdates(accessToken) {
   return { toFind, igLetter };
 }
 
+export async function appendInfluencerRow(accessToken, profile) {
+  const { values } = await readSheetRows(accessToken);
+  if (!values || values.length < 2) throw new Error('Sheet appears to be empty');
+
+  const headers = values[0].map(h => h.toLowerCase().trim());
+  const colCount = headers.length;
+
+  // Build a row array aligned to the sheet's existing columns
+  const row = Array(colCount).fill('');
+  headers.forEach((h, i) => {
+    if (h === 'name' || h === 'full name') row[i] = profile.name || '';
+    else if (h.includes('instagram') && !h.includes('follower')) row[i] = profile.handle || '';
+    else if (h.includes('follower')) row[i] = profile.followers ? String(profile.followers) : '';
+    else if (h.includes('email')) row[i] = profile.email || '';
+    else if (h.includes('location') || h.includes('city')) row[i] = profile.location || '';
+    else if (h.includes('niche') || h.includes('industry') || h.includes('category')) row[i] = profile.niche || '';
+  });
+
+  const res = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/A:${colToLetter(colCount - 1)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ values: [row] }),
+    }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || `Sheets append failed (${res.status})`);
+  }
+  return res.json();
+}
+
 export async function buildNicheUpdates(accessToken, influencers) {
   const { values } = await readSheetRows(accessToken);
   if (!values || values.length < 2) throw new Error('Sheet appears to be empty');

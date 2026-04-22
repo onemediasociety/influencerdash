@@ -1,10 +1,11 @@
 import { useState, useMemo } from 'react';
-import { Search, SlidersHorizontal, X, ChevronDown, RefreshCw, AlertCircle } from 'lucide-react';
+import { Search, SlidersHorizontal, X, ChevronDown, RefreshCw, AlertCircle, UserPlus } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import InfluencerCard from '../components/InfluencerCard';
 import InfluencerModal from '../components/InfluencerModal';
 import NicheResearcher from '../components/NicheResearcher';
 import InstagramFinder from '../components/InstagramFinder';
+import AddInfluencerModal from '../components/AddInfluencerModal';
 
 const FOLLOWER_RANGES = [
   { label: 'All sizes', min: 0, max: Infinity },
@@ -60,6 +61,7 @@ export default function SearchPage() {
   const [sortBy, setSortBy] = useState('followers_desc');
   const [showFilters, setShowFilters] = useState(true);
   const [selectedInfluencer, setSelectedInfluencer] = useState(null);
+  const [showAddModal, setShowAddModal] = useState(false);
 
   const countries = useMemo(() =>
     [...new Set(influencers.map(i => i.country).filter(Boolean))].sort(), [influencers]);
@@ -112,6 +114,13 @@ export default function SearchPage() {
             <p className="text-sm text-gray-500">Live from your Google Sheet</p>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-purple-600 text-white rounded-xl text-sm font-medium hover:bg-purple-700 transition-colors shadow-sm"
+            >
+              <UserPlus size={15} />
+              Add Influencer
+            </button>
             <InstagramFinder />
             <NicheResearcher />
             <button
@@ -254,6 +263,10 @@ export default function SearchPage() {
 
       {selectedInfluencer && (
         <InfluencerModal influencer={selectedInfluencer} onClose={() => setSelectedInfluencer(null)} />
+      )}
+
+      {showAddModal && (
+        <AddInfluencerModal onClose={() => setShowAddModal(false)} />
       )}
     </div>
   );
