@@ -62,8 +62,8 @@ export default function ProfileRefresher() {
           if (profile.engagement != null && cols.engagement) {
             updates.push({ range: `${cols.engagement}${rowNum}`, value: `${profile.engagement}%` });
           }
-          // Email, location, niche — fill in only if currently blank
-          if (profile.email && !current.email && cols.email) {
+          // Email — always overwrite with latest found value
+          if (profile.email && cols.email) {
             updates.push({ range: `${cols.email}${rowNum}`, value: profile.email });
           }
           if (profile.location && !current.location && cols.location) {

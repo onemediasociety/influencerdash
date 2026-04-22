@@ -52,8 +52,12 @@ export default function InstagramFinder() {
           try {
             const profile = await lookupInstagramProfile(username);
             profileFollowers = profile.followers || 0;
-            if (profile.email && !current.email && cols.email)
+            // Email + engagement — always overwrite with latest values
+            if (profile.email && cols.email)
               updates.push({ range: `${cols.email}${rowNum}`, value: profile.email });
+            if (profile.engagement != null && cols.engagement)
+              updates.push({ range: `${cols.engagement}${rowNum}`, value: `${profile.engagement}%` });
+            // Location + niche — fill in only if currently blank
             if (profile.location && !current.location && cols.location)
               updates.push({ range: `${cols.location}${rowNum}`, value: profile.location });
             if (profile.niche && !current.niche && cols.niche)
