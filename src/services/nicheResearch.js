@@ -1,4 +1,4 @@
-const BLOCKED_PATHS = new Set(['p', 'explore', 'accounts', 'stories', 'reels', 'tv', 'about', 'legal', 'privacy', 'help', 'press', 'api', 'directory', 'hashtag', 'locations', 'web', 'ar', 'lite', 'music']);
+const BLOCKED_PATHS = new Set(['p', 'reel', 'reels', 'explore', 'accounts', 'stories', 'tv', 'about', 'legal', 'privacy', 'help', 'press', 'api', 'directory', 'hashtag', 'locations', 'web', 'ar', 'lite', 'music', 'direct', 'shop', 'tags', 's']);
 
 function extractIgHandles(html) {
   const matches = [...html.matchAll(/instagram\.com\/([a-zA-Z0-9._]{1,30})/g)];
