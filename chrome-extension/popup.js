@@ -8,35 +8,21 @@ function fmt(n) {
 function timeAgo(ts) {
   if (!ts) return '';
   const sec = Math.floor((Date.now() - ts) / 1000);
-  if (sec < 60)   return 'just now';
-  if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
+  if (sec < 60)    return 'just now';
+  if (sec < 3600)  return `${Math.floor(sec / 60)}m ago`;
   if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`;
   return `${Math.floor(sec / 86400)}d ago`;
 }
 
-function renderLastSync(lastSync) {
-  const area = document.getElementById('last-sync-area');
-  if (!lastSync) {
-    area.innerHTML = `
-      <div class="no-sync-yet">
-        <span class="emoji">📋</span>
-        Visit any Instagram profile and we'll automatically capture their data into your sheet.
-      </div>`;
-    return;
-  }
+// ── Profile card HTML (reused by capture and dashboard views) ──────────────
 
-  const { profile, action, timestamp } = lastSync;
+function profileCardHTML(profile, label) {
   const initials = (profile.name || profile.username || '?')
     .split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase();
 
-  const actionBadge = action === 'added'
-    ? '<span class="action-badge added">+ Added</span>'
-    : '<span class="action-badge updated">↻ Updated</span>';
-
-  area.innerHTML = `
-    <div class="last-sync-card">
-      <div class="card-label">Last captured ${actionBadge}</div>
-
+  return `
+    <div class="profile-card">
+      ${label ? `<div class="card-label">${label}</div>` : ''}
       <div class="profile-row">
         <div class="avatar" id="av-wrap">
           <img id="av-img" src="https://unavatar.io/instagram/${profile.username}"
@@ -74,23 +60,111 @@ function renderLastSync(lastSync) {
       <div class="stat-full" style="margin-top:6px;">
         <span class="tag">✉</span> ${profile.email}
       </div>` : ''}
-
-      <div class="sync-time">${timeAgo(timestamp)}</div>
     </div>`;
-
-  // Hide the initials fallback if image loads successfully
-  const img = document.getElementById('av-img');
-  if (img) {
-    img.onload = () => {
-      const av = document.getElementById('av-wrap');
-      if (av) av.style.fontSize = '0'; // hide initials text, show image
-    };
-  }
 }
 
+// ── Capture view ──────────────────────────────────────────────────────────────
+
+let capturedProfile = null;
+
+function renderCaptureProfile(profile) {
+  capturedProfile = profile;
+  const area = document.getElementById('capture-area');
+
+  area.innerHTML = `
+    ${profileCardHTML(profile, '')}
+    <button id="sync-btn" class="btn btn-primary">Sync to Sheet</button>
+    <div id="sync-result" class="status"></div>
+  `;
+
+  const img = document.getElementById('av-img');
+  if (img) img.onload = () => {
+    const av = document.getElementById('av-wrap');
+    if (av) av.style.fontSize = '0';
+  };
+
+  document.getElementById('sync-btn').addEventListener('click', async () => {
+    const btn    = document.getElementById('sync-btn');
+    const result = document.getElementById('sync-result');
+
+    btn.disabled    = true;
+    btn.textContent = 'Syncing…';
+    result.className = 'status';
+
+    try {
+      const res = await chrome.runtime.sendMessage({ type: 'SYNC_PROFILE', profile: capturedProfile });
+
+      if (res?.ok) {
+        const verb = res.action === 'added' ? 'Added' : 'Updated';
+        result.textContent = `✓ ${verb} @${capturedProfile.username} in sheet`;
+        result.className   = 'status visible ok';
+        btn.textContent    = 'Synced ✓';
+        btn.className      = 'btn btn-success';
+      } else if (res?.error === 'SETUP_REQUIRED') {
+        result.textContent = 'Setup required — click ⚙️ to configure';
+        result.className   = 'status visible err';
+        btn.disabled       = false;
+        btn.textContent    = 'Sync to Sheet';
+      } else {
+        result.textContent = `Error: ${res?.error || 'unknown error'}`;
+        result.className   = 'status visible err';
+        btn.disabled       = false;
+        btn.textContent    = 'Sync to Sheet';
+      }
+    } catch (err) {
+      result.textContent = `Error: ${err.message}`;
+      result.className   = 'status visible err';
+      btn.disabled       = false;
+      btn.textContent    = 'Sync to Sheet';
+    }
+  });
+}
+
+function renderCaptureError(msg) {
+  const area = document.getElementById('capture-area');
+  area.innerHTML = `
+    <div class="no-sync-yet">
+      <span class="emoji">⚠️</span>
+      ${msg}
+    </div>`;
+}
+
+// ── Dashboard (last sync) view ────────────────────────────────────────────────
+
+function renderLastSync(lastSync) {
+  const area = document.getElementById('last-sync-area');
+  if (!lastSync) {
+    area.innerHTML = `
+      <div class="no-sync-yet">
+        <span class="emoji">📋</span>
+        Visit any Instagram profile and click this extension to capture their data.
+      </div>`;
+    return;
+  }
+
+  const { profile, action, timestamp } = lastSync;
+  const actionBadge = action === 'added'
+    ? '<span class="action-badge added">+ Added</span>'
+    : '<span class="action-badge updated">↻ Updated</span>';
+
+  area.innerHTML = `
+    ${profileCardHTML(profile, `Last captured ${actionBadge}`)}
+    <div class="sync-time">${timeAgo(timestamp)}</div>
+  `;
+
+  const img = document.getElementById('av-img');
+  if (img) img.onload = () => {
+    const av = document.getElementById('av-wrap');
+    if (av) av.style.fontSize = '0';
+  };
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────────
+
 document.addEventListener('DOMContentLoaded', async () => {
-  const dashboard  = document.getElementById('dashboard');
-  const setup      = document.getElementById('setup');
+  const captureEl   = document.getElementById('capture');
+  const dashboardEl = document.getElementById('dashboard');
+  const setupEl     = document.getElementById('setup');
   const settingsBtn = document.getElementById('settings-btn');
   const clientIdInput = document.getElementById('client-id');
   const sheetIdInput  = document.getElementById('sheet-id');
@@ -100,24 +174,24 @@ document.addEventListener('DOMContentLoaded', async () => {
   const redirectUrlEl = document.getElementById('redirect-url');
   const sessionBadge  = document.getElementById('session-badge');
 
-  let showingSettings = false;
+  let activeView     = null;
+  let preSettingsView = null;
 
-  function showDashboard() {
-    showingSettings = false;
-    dashboard.classList.add('visible');
-    setup.classList.remove('visible');
-    settingsBtn.title = 'Settings';
-  }
-
-  function showSetup() {
-    showingSettings = true;
-    setup.classList.add('visible');
-    dashboard.classList.remove('visible');
-    settingsBtn.title = 'Back';
+  function showView(id) {
+    captureEl.classList.toggle('visible',   id === 'capture');
+    dashboardEl.classList.toggle('visible', id === 'dashboard');
+    setupEl.classList.toggle('visible',     id === 'setup');
+    activeView       = id;
+    settingsBtn.title = id === 'setup' ? 'Back' : 'Settings';
   }
 
   settingsBtn.addEventListener('click', () => {
-    if (showingSettings) showDashboard(); else showSetup();
+    if (activeView === 'setup') {
+      showView(preSettingsView || 'dashboard');
+    } else {
+      preSettingsView = activeView;
+      showView('setup');
+    }
   });
 
   // ── Redirect URL ──
@@ -130,24 +204,60 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (clientId) clientIdInput.value = clientId;
   if (sheetId)  sheetIdInput.value  = sheetId;
 
-  // ── Check auth + last sync state ──
+  // ── Auth state ──
   const { accessToken, tokenExpiry, lastSync, sessionCount } =
     await chrome.storage.local.get(['accessToken', 'tokenExpiry', 'lastSync', 'sessionCount']);
 
   const isConnected = accessToken && tokenExpiry > Date.now();
 
-  if (isConnected && clientId) {
-    // Show dashboard
-    showDashboard();
-    renderLastSync(lastSync || null);
-    if (sessionCount) {
-      sessionBadge.textContent = `${sessionCount} synced this session`;
-    }
+  if (!clientId) {
+    // First-time setup
+    showView('setup');
   } else {
-    // Show setup
-    showSetup();
-    if (clientId && !isConnected) {
-      showStatus('Session expired — visit an Instagram profile to re-authenticate.', 'ok');
+    // Check if we're on an Instagram profile page
+    let onInstagramProfile = false;
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const url   = tab?.url || '';
+      // Match instagram.com/<username> but not feed, explore, etc.
+      const m = url.match(/https:\/\/www\.instagram\.com\/([^/?#]+)\/?(?:[?#].*)?$/);
+      const blockedPaths = new Set([
+        'p','reel','reels','explore','accounts','stories','tv','about','legal',
+        'privacy','help','api','directory','hashtag','locations','web','lite',
+        'music','direct','shop','tags','s','_n','graphql',
+      ]);
+      if (m && m[1] && !blockedPaths.has(m[1].toLowerCase())) {
+        onInstagramProfile = true;
+
+        showView('capture');
+
+        // Ask content script for profile data
+        try {
+          const res = await chrome.tabs.sendMessage(tab.id, { type: 'GET_CURRENT_PROFILE' });
+          if (res?.ok && res.profile) {
+            renderCaptureProfile(res.profile);
+          } else if (res?.error === 'NOT_PROFILE_PAGE') {
+            onInstagramProfile = false; // fall through to dashboard
+          } else {
+            renderCaptureError('Could not read profile — try reloading the page');
+          }
+        } catch {
+          renderCaptureError('Could not connect to the page — try reloading Instagram');
+        }
+      }
+    } catch {
+      // tabs API unavailable — fall through to dashboard
+    }
+
+    if (!onInstagramProfile) {
+      showView('dashboard');
+      renderLastSync(lastSync || null);
+      if (sessionCount) {
+        sessionBadge.textContent = `${sessionCount} synced this session`;
+      }
+      if (!isConnected) {
+        showStatus('Session expired — visit an Instagram profile and click this extension to re-authenticate.', 'ok');
+      }
     }
   }
 
@@ -161,7 +271,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (sid) toSave.sheetId = sid;
     await chrome.storage.sync.set(toSave);
     await chrome.storage.local.remove(['accessToken', 'tokenExpiry']);
-    showStatus('Saved! Visit any Instagram profile to connect Google and start syncing.', 'ok');
+    showStatus('Saved! Visit any Instagram profile and click this extension to start syncing.', 'ok');
   });
 
   // ── Sign out ──

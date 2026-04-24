@@ -1,6 +1,6 @@
 // Content script — runs on every instagram.com page.
-// Detects profile pages, extracts data from the DOM + injected page-script,
-// then asks the background worker to sync it to the Google Sheet.
+// Accumulates profile data from page-script API interception.
+// Does NOT auto-sync — responds to GET_CURRENT_PROFILE from the popup instead.
 
 const BLOCKED = new Set([
   'p','reel','reels','explore','accounts','stories','tv','about','legal',
@@ -47,9 +47,10 @@ const NICHES = [
   { name: 'Gaming',                 kw: /gaming|gamer|game|esports|stream|twitch|nintendo|playstation|xbox/ },
   { name: 'Music',                  kw: /music|singer|musician|rapper|dj|album|concert|band|producer/ },
   { name: 'Comedy & Entertainment', kw: /comedy|funny|humor|comedian|sketch|meme|entertainer|skit/ },
+  { name: 'Podcast & Media',        kw: /podcast|podcaster|\bhost\b|episode|radio|broadcaster|media|interview/ },
   { name: 'Art & Design',           kw: /art|design|creative|artist|illustrator|photographer|paint|draw|graphic/ },
   { name: 'Business & Finance',     kw: /finance|invest|money|entrepreneur|business|crypto|stock|wealth|ceo/ },
-  { name: 'Parenting',              kw: /parent|mom|dad|family|baby|kids|children|motherhood|fatherhood/ },
+  { name: 'Parenting',              kw: /parent|\bmom\b|\bdad\b|family|baby|\bkids\b|children|motherhood|fatherhood/ },
   { name: 'Sports',                 kw: /sport|football|basketball|soccer|tennis|athlete|nfl|nba|baseball|golf/ },
   { name: 'Education',              kw: /education|learn|teach|professor|student|school|university|tutor/ },
   { name: 'Sustainability',         kw: /sustainable|eco|environment|green|zero.?waste|climate|organic|vegan/ },
@@ -67,14 +68,28 @@ function getProfileUsername() {
   const path = location.pathname.replace(/^\/|\/$/g, '');
   if (!path) return null;
   const [segment, sub] = path.split('/');
-  // Must be a top-level path with no sub-path (or only trailing slash)
   if (!segment || sub || BLOCKED.has(segment.toLowerCase())) return null;
   return segment.toLowerCase();
 }
 
-//─────────────────────── DOM-based data extraction ───────────────────────────
-// Fallback when the page-script injection can't get post data (e.g. the data
-// was already loaded before our script ran). Reads what's visible in the DOM.
+// ─────────────── DOM + script-tag data extraction (fallback) ─────────────────
+
+function extractFollowersFromScripts() {
+  const patterns = [
+    /"follower_count":(\d+)/,
+    /"edge_followed_by":\{"count":(\d+)\}/,
+    /"followed_by_count":(\d+)/,
+  ];
+  for (const script of document.querySelectorAll('script')) {
+    const text = script.textContent;
+    if (!text || !text.includes('follower')) continue;
+    for (const p of patterns) {
+      const m = text.match(p);
+      if (m) return parseInt(m[1], 10);
+    }
+  }
+  return 0;
+}
 
 function extractFromDom(username) {
   const profile = {
@@ -89,8 +104,6 @@ function extractFromDom(username) {
   };
 
   // ── Name ──
-  // Instagram renders the display name in a heading inside the profile header.
-  // Selectors are ordered from most-specific to most-generic.
   const nameSelectors = [
     'header h1', 'header h2',
     'section h1', 'section h2',
@@ -118,25 +131,23 @@ function extractFromDom(username) {
     profile.location = extractLocation(bioText);
   }
 
-  // Business accounts have a mailto: "Email" button — most reliable email source
   if (!profile.email) {
     const mailtoEl = document.querySelector('a[href^="mailto:"]');
     if (mailtoEl) profile.email = mailtoEl.href.replace('mailto:', '').split('?')[0];
   }
 
-  // ── Followers — most reliable from og:description meta tag ──
+  // ── Followers — og:description meta tag (most reliable) ──
   const meta = document.querySelector('meta[name="description"], meta[property="og:description"]');
   if (meta?.content) {
     const m = meta.content.match(/([\d,.]+\s*[KMBkmb]?)\s*Followers/i);
     if (m) profile.followers = parseCount(m[1]);
   }
 
-  // ── Followers fallback — scan the stats list in the profile header ──
+  // ── Followers fallback — header stats list (uses title attr for exact count) ──
   if (!profile.followers) {
     const listItems = document.querySelectorAll('header ul li, header section ul li');
     for (const li of listItems) {
       if (/follower/i.test(li.textContent)) {
-        // The actual number is in a nested span; pick the largest parsed value
         for (const sp of li.querySelectorAll('span')) {
           const n = parseCount(sp.getAttribute('title') || sp.textContent);
           if (n > profile.followers) profile.followers = n;
@@ -145,12 +156,14 @@ function extractFromDom(username) {
     }
   }
 
-  // ── Engagement from visible post grid ──
-  // Instagram stopped showing individual like counts on the grid (2021+),
-  // but we can still read counts from post thumbnails' aria-labels on some
-  // account types, or from the `<article>` elements when expanded.
+  // ── Followers fallback — embedded JSON in script tags ──
+  if (!profile.followers) {
+    profile.followers = extractFollowersFromScripts();
+  }
+
+  // ── Engagement from visible post grid aria-labels ──
   if (profile.followers > 0) {
-    const likePattern  = /([\d,.]+[KMBkmb]?)\s*like/gi;
+    const likePattern    = /([\d,.]+[KMBkmb]?)\s*like/gi;
     const commentPattern = /([\d,.]+[KMBkmb]?)\s*comment/gi;
     const ariaTexts = [...document.querySelectorAll('[aria-label]')]
       .map(el => el.getAttribute('aria-label'))
@@ -172,124 +185,20 @@ function extractFromDom(username) {
   return profile;
 }
 
-// ─────────────────────────── toast notification ───────────────────────────────
-
-function showToast(message, type = 'info') {
-  const id = 'igdash-toast';
-  document.getElementById(id)?.remove();
-
-  const colours = { success: '#7c3aed', error: '#dc2626', info: '#2563eb' };
-
-  if (!document.getElementById('igdash-toast-style')) {
-    const style = document.createElement('style');
-    style.id = 'igdash-toast-style';
-    style.textContent = `
-      @keyframes igdash-in  { from { transform: translateY(16px); opacity:0 } to { transform:none; opacity:1 } }
-      @keyframes igdash-out { from { opacity:1 } to { opacity:0 } }
-      #igdash-toast { animation: igdash-in .2s ease; }
-      #igdash-toast.fade { animation: igdash-out .3s ease forwards; }
-    `;
-    document.head.appendChild(style);
-  }
-
-  const toast = document.createElement('div');
-  toast.id = id;
-  toast.style.cssText = `
-    position:fixed; bottom:24px; right:24px; z-index:2147483647;
-    background:${colours[type] || colours.info}; color:#fff;
-    padding:11px 16px; border-radius:10px; font-size:13px;
-    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-    box-shadow:0 4px 20px rgba(0,0,0,.3); max-width:260px; line-height:1.4;
-    pointer-events:none;
-  `;
-  toast.textContent = message;
-  document.body.appendChild(toast);
-
-  setTimeout(() => {
-    toast.classList.add('fade');
-    setTimeout(() => toast.remove(), 350);
-  }, 4000);
-}
-
-// ──────────────────────────── sync logic ─────────────────────────────────────
-
-// Per-session cooldown: don't re-sync the same profile URL within 5 min
-const syncCache = {};
-const COOLDOWN = 5 * 60 * 1000;
-let syncInProgress = false;
-
-async function triggerSync(profile) {
-  if (syncInProgress) return;
-  const url = location.href;
-  if (syncCache[url] && Date.now() - syncCache[url] < COOLDOWN) return;
-
-  syncInProgress = true;
-  showToast(`Syncing @${profile.username}…`, 'info');
-
-  try {
-    const res = await chrome.runtime.sendMessage({ type: 'SYNC_PROFILE', profile });
-    syncCache[url] = Date.now();
-
-    if (res?.ok) {
-      const verb = res.action === 'updated' ? 'Updated' : 'Added';
-      showToast(`✓ ${verb} @${profile.username} in sheet`, 'success');
-    } else if (res?.error === 'SETUP_REQUIRED') {
-      showToast('InfluencerDash: Click the extension icon and enter your Google OAuth Client ID', 'error');
-    } else {
-      showToast(`Sync failed: ${res?.error || 'unknown error'}`, 'error');
-    }
-  } catch (err) {
-    showToast(`Extension error: ${err.message}`, 'error');
-  } finally {
-    syncInProgress = false;
-  }
-}
-
-// ─── accumulated data from page-script messages ───────────────────────────────
-// Profile and media arrive in separate API responses; we merge them.
-let pendingProfile = null;
-let pendingMediaItems = null;
+// ─────────────────────────── engagement calc ─────────────────────────────────
 
 function computeEngagementFromItems(items, followers) {
   if (!items?.length || followers <= 0) return null;
-  // New REST API uses like_count/comment_count; old GraphQL uses edge_liked_by.count
   const avgLikes    = items.reduce((s, p) => s + (p.like_count    ?? p.edge_liked_by?.count    ?? 0), 0) / items.length;
   const avgComments = items.reduce((s, p) => s + (p.comment_count ?? p.edge_media_to_comment?.count ?? 0), 0) / items.length;
   const rate = (avgLikes + avgComments) / followers * 100;
   return (rate > 0 && rate < 100) ? parseFloat(rate.toFixed(2)) : null;
 }
 
-function buildAndSync(user, mediaItems) {
-  const username = getProfileUsername();
-  if (!username) return;
+// ─── accumulated data from page-script messages ───────────────────────────────
 
-  const bio = user.biography || '';
-  // New REST API: follower_count; old GraphQL: edge_followed_by.count
-  const followers = user.follower_count ?? user.edge_followed_by?.count ?? 0;
-
-  // Posts: old GraphQL embeds them on the user object; new API sends separately
-  const embeddedPosts = user.edge_owner_to_timeline_media?.edges?.map(e => e.node) || [];
-  const allItems = mediaItems?.length ? mediaItems : embeddedPosts;
-  const engagement = computeEngagementFromItems(allItems, followers);
-
-  const apiEmail   = user.public_email || user.business_email || '';
-  const bioEmail   = extractEmail(bio);
-  const mailtoEl   = document.querySelector('a[href^="mailto:"]');
-  const mailtoEmail = mailtoEl ? mailtoEl.href.replace('mailto:', '').split('?')[0] : '';
-
-  triggerSync({
-    username,
-    name:     user.full_name || '',
-    followers,
-    engagement,
-    bio,
-    email:    apiEmail || mailtoEmail || bioEmail,
-    location: user.city_name || user.location_city || extractLocation(bio),
-    niche:    classifyNiche(`${user.category_name || ''} ${bio} ${username}`),
-  });
-}
-
-// ────────────── listener for data posted from page-script.js ─────────────────
+let pendingProfile    = null;
+let pendingMediaItems = null;
 
 window.addEventListener('message', event => {
   if (event.source !== window || !event.data?.__igDash) return;
@@ -297,62 +206,89 @@ window.addEventListener('message', event => {
   const username = getProfileUsername();
   if (!username) return;
 
-  // ── Media items (engagement data) ──
   if (event.data.__igDash === 'media') {
     pendingMediaItems = event.data.items;
-    if (pendingProfile) buildAndSync(pendingProfile, pendingMediaItems);
     return;
   }
 
-  // ── User profile data ──
   const user = event.data.user;
   if (!user || user.username?.toLowerCase() !== username) return;
 
-  pendingProfile = user;
-
-  // If we already have media items (or posts are embedded), sync now
-  const hasEmbeddedPosts = (user.edge_owner_to_timeline_media?.edges?.length ?? 0) > 0;
-  if (pendingMediaItems || hasEmbeddedPosts) {
-    buildAndSync(user, pendingMediaItems);
-  } else {
-    // Wait up to 3s for the media feed response to arrive
-    setTimeout(() => {
-      if (pendingProfile === user) buildAndSync(user, pendingMediaItems);
-    }, 3000);
-  }
+  // Prefer user objects that carry follower data
+  const newFollowers = user.follower_count ?? user.edge_followed_by?.count ?? 0;
+  const curFollowers = pendingProfile
+    ? (pendingProfile.follower_count ?? pendingProfile.edge_followed_by?.count ?? 0)
+    : 0;
+  if (!pendingProfile || newFollowers > curFollowers) pendingProfile = user;
 });
 
-// ────────────────────────── page initialisation ───────────────────────────────
+// ────────── GET_CURRENT_PROFILE — called by popup when user clicks icon ───────
 
-function initPage() {
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message.type !== 'GET_CURRENT_PROFILE') return false;
+
   const username = getProfileUsername();
-  if (!username) return;
+  if (!username) {
+    sendResponse({ ok: false, error: 'NOT_PROFILE_PAGE' });
+    return false;
+  }
 
-  // page-script.js runs as a MAIN-world content script (manifest.json) so no injection needed.
-  // Give it 5 seconds to capture the API response; fall back to DOM parsing if it doesn't.
-  setTimeout(() => {
-    if (syncInProgress || (syncCache[location.href] && Date.now() - syncCache[location.href] < COOLDOWN)) return;
-    const domProfile = extractFromDom(username);
-    if (domProfile.followers > 0 || domProfile.name) {
-      triggerSync(domProfile);
+  let profile = null;
+
+  // Build from API-intercepted data (most accurate)
+  if (pendingProfile) {
+    const user        = pendingProfile;
+    const bio         = user.biography || '';
+    const followers   = user.follower_count ?? user.edge_followed_by?.count ?? 0;
+    const embedded    = user.edge_owner_to_timeline_media?.edges?.map(e => e.node) || [];
+    const allItems    = pendingMediaItems?.length ? pendingMediaItems : embedded;
+    const engagement  = computeEngagementFromItems(allItems, followers);
+    const apiEmail    = user.public_email || user.business_email || '';
+    const bioEmail    = extractEmail(bio);
+    const mailtoEl    = document.querySelector('a[href^="mailto:"]');
+    const mailtoEmail = mailtoEl ? mailtoEl.href.replace('mailto:', '').split('?')[0] : '';
+
+    profile = {
+      username,
+      name:       user.full_name || '',
+      followers,
+      engagement,
+      bio,
+      email:      apiEmail || mailtoEmail || bioEmail,
+      location:   user.city_name || user.location_city || extractLocation(bio),
+      niche:      classifyNiche(`${user.category_name || ''} ${bio} ${username}`),
+    };
+  }
+
+  // DOM extraction (always run, fills gaps and acts as primary if no API data)
+  const dom = extractFromDom(username);
+
+  if (!profile) {
+    profile = dom;
+  } else {
+    if (profile.followers === 0 && dom.followers > 0) {
+      profile.followers = dom.followers;
+      if (profile.engagement === null) profile.engagement = dom.engagement;
     }
-  }, 5000);
-}
+    if (!profile.email    && dom.email)    profile.email    = dom.email;
+    if (!profile.location && dom.location) profile.location = dom.location;
+    if (!profile.name     && dom.name)     profile.name     = dom.name;
+  }
 
-// ──────────────── SPA navigation detection (Instagram is a React SPA) ─────────
+  sendResponse({ ok: true, profile });
+  return false;
+});
+
+// ──────────────────────── SPA navigation detection ───────────────────────────
 
 let lastPath = location.pathname;
 
 const navObserver = new MutationObserver(() => {
   if (location.pathname !== lastPath) {
     lastPath          = location.pathname;
-    syncInProgress    = false;
     pendingProfile    = null;
     pendingMediaItems = null;
-    setTimeout(initPage, 1500); // let the new page's content render
   }
 });
 
 navObserver.observe(document.documentElement, { subtree: true, childList: true });
-
-initPage();

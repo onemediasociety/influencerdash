@@ -3,7 +3,7 @@
   "name": "InfluencerDash — Sheet Sync",
   "version": "1.0",
   "description": "Visit any Instagram profile to automatically capture follower count, engagement rate, and contact info into your Google Sheet.",
-  "permissions": ["identity", "storage"],
+  "permissions": ["identity", "storage", "tabs", "activeTab"],
   "host_permissions": [
     "https://www.instagram.com/*",
     "https://sheets.googleapis.com/*"

@@ -51,17 +51,18 @@
     .dot.green  { background: #22c55e; }
     .dot.gray   { background: #9ca3af; }
 
-    /* ── Dashboard view ── */
-    #dashboard { display: none; flex-direction: column; gap: 12px; }
-    #dashboard.visible { display: flex; }
+    /* ── Views ── */
+    #capture, #dashboard, #setup { display: none; flex-direction: column; gap: 12px; }
+    #capture.visible, #dashboard.visible, #setup.visible { display: flex; }
 
-    .last-sync-card {
+    /* ── Profile card (shared by capture + dashboard) ── */
+    .profile-card {
       background: #faf5ff;
       border: 1px solid #ede9fe;
       border-radius: 10px;
       padding: 12px;
     }
-    .last-sync-card .card-label {
+    .profile-card .card-label {
       font-size: 10px;
       font-weight: 600;
       color: #7c3aed;
@@ -150,9 +151,6 @@
     .no-sync-yet .emoji { font-size: 28px; display: block; margin-bottom: 6px; }
 
     /* ── Setup view ── */
-    #setup { display: none; flex-direction: column; gap: 12px; }
-    #setup.visible { display: flex; }
-
     .status {
       font-size: 12px;
       padding: 9px 12px;
@@ -206,10 +204,12 @@
       width: 100%; padding: 10px; border: none; border-radius: 8px;
       font-size: 13px; font-weight: 600; cursor: pointer; transition: background .15s;
     }
+    .btn:disabled { opacity: .6; cursor: default; }
     .btn-primary   { background: #7c3aed; color: #fff; }
-    .btn-primary:hover { background: #6d28d9; }
+    .btn-primary:hover:not(:disabled) { background: #6d28d9; }
     .btn-secondary { background: #fff; color: #6b7280; border: 1px solid #e5e7eb; }
-    .btn-secondary:hover { background: #f9fafb; }
+    .btn-secondary:hover:not(:disabled) { background: #f9fafb; }
+    .btn-success   { background: #059669; color: #fff; }
 
     hr { border: none; border-top: 1px solid #f3f4f6; }
   </style>
@@ -225,7 +225,17 @@
     </div>
   </div>
 
-  <!-- ── Dashboard view ── -->
+  <!-- ── Capture view — shown when on an Instagram profile ── -->
+  <div class="body" id="capture">
+    <div id="capture-area">
+      <div class="no-sync-yet">
+        <span class="emoji">⏳</span>
+        Reading profile…
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Dashboard view — shown when not on a profile ── -->
   <div class="body" id="dashboard">
     <div style="display:flex; align-items:center; justify-content:space-between;">
       <span class="pill green" id="conn-pill">
