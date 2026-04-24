@@ -223,6 +223,78 @@ export async function deleteSheetRows(accessToken, rowNums) {
   return res.json();
 }
 
+// Groups sheet rows by normalised Instagram handle, picks the best row for each
+// duplicate group (most data filled in, then highest follower count), merges any
+// missing values from dupes into the winner, and returns the rows to delete.
+export async function findAndMergeDuplicates(accessToken) {
+  const { values } = await readSheetRows(accessToken);
+  if (!values || values.length < 2) return { mergeUpdates: [], rowsToDelete: [], duplicateCount: 0 };
+
+  const headers = values[0].map(h => h.toLowerCase().trim());
+  const igCol = headers.findIndex(h => h.includes('instagram') && !h.includes('follower'));
+  if (igCol === -1) throw new Error('No Instagram column found in the sheet');
+  const followCol = headers.findIndex(h => h.includes('follower'));
+
+  function normalizeHandle(raw) {
+    return (raw || '').trim()
+      .replace(/^@/, '')
+      .replace(/.*instagram\.com\//, '')
+      .replace(/[/?#].*$/, '')
+      .toLowerCase();
+  }
+
+  // Group rows by normalised handle
+  const groups = {};
+  values.slice(1).forEach((row, i) => {
+    const handle = normalizeHandle(row[igCol] || '');
+    if (!handle) return;
+    if (!groups[handle]) groups[handle] = [];
+    groups[handle].push({ rowNum: i + 2, row: [...row] }); // i+2 = 1-indexed + skip header
+  });
+
+  const rowsToDelete = [];
+  const mergeUpdates = [];
+  let duplicateCount = 0;
+
+  for (const entries of Object.values(groups)) {
+    if (entries.length <= 1) continue;
+    duplicateCount++;
+
+    // Score each row: most non-empty cells wins; break ties by follower count
+    const scored = entries.map(({ rowNum, row }) => {
+      const rawFollowers = followCol >= 0 ? (row[followCol] || '') : '';
+      const followers = parseInt(rawFollowers.replace(/[^0-9]/g, '')) || 0;
+      return { rowNum, row, score: row.filter(c => (c || '').trim()).length, followers };
+    });
+    scored.sort((a, b) => b.score - a.score || b.followers - a.followers);
+
+    const winner = scored[0];
+    const dupes  = scored.slice(1);
+
+    // Merge missing cells from dupes into winner
+    const merged = [...winner.row];
+    while (merged.length < headers.length) merged.push('');
+
+    for (const dup of dupes) {
+      dup.row.forEach((cell, i) => {
+        if ((cell || '').trim() && !(merged[i] || '').trim()) merged[i] = cell;
+      });
+      rowsToDelete.push(dup.rowNum);
+    }
+
+    // Queue cell updates for any newly filled values
+    merged.forEach((cell, i) => {
+      const orig = (winner.row[i] || '').trim();
+      const now  = (cell || '').trim();
+      if (now && now !== orig) {
+        mergeUpdates.push({ range: `${colToLetter(i)}${winner.rowNum}`, value: cell });
+      }
+    });
+  }
+
+  return { mergeUpdates, rowsToDelete, duplicateCount };
+}
+
 export async function buildNicheUpdates(accessToken, influencers) {
   const { values } = await readSheetRows(accessToken);
   if (!values || values.length < 2) throw new Error('Sheet appears to be empty');

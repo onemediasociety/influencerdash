@@ -7,6 +7,7 @@ import NicheResearcher from '../components/NicheResearcher';
 import InstagramFinder from '../components/InstagramFinder';
 import AddInfluencerModal from '../components/AddInfluencerModal';
 import ProfileRefresher from '../components/ProfileRefresher';
+import DeduplicateButton from '../components/DeduplicateButton';
 
 const FOLLOWER_RANGES = [
   { label: 'All sizes', min: 0, max: Infinity },
@@ -123,6 +124,7 @@ export default function SearchPage() {
               Add Influencer
             </button>
             <ProfileRefresher />
+            <DeduplicateButton />
             <InstagramFinder />
             <NicheResearcher />
             <button
