@@ -1,7 +1,7 @@
-// Runs in the PAGE's JavaScript context (not the extension's isolated world).
-// This lets us access window globals that Instagram sets — specifically the
-// __additionalDataLoaded callback that carries full profile + post data
-// including like/comment counts needed for engagement rate.
+// Runs in the PAGE's JavaScript context.
+// Intercepts Instagram's API responses (fetch + XHR + window callbacks)
+// to capture the full user object including post like/comment counts
+// needed for engagement rate, and public_email for business accounts.
 (function () {
   function dispatch(user) {
     if (!user?.username) return;
@@ -9,30 +9,69 @@
   }
 
   function tryExtract(data) {
-    // Modern API response shape
-    dispatch(data?.graphql?.user || data?.data?.user);
+    if (!data) return;
+    dispatch(data?.graphql?.user);
+    dispatch(data?.data?.user);
+    dispatch(data?.user);
   }
 
-  // ── Hook the callback Instagram fires when a profile's data finishes loading ──
-  const orig = window.__additionalDataLoaded;
+  // ── 1. Hook __additionalDataLoaded ──────────────────────────────────────────
+  const origAdditional = window.__additionalDataLoaded;
   window.__additionalDataLoaded = function (type, data) {
     try { tryExtract(data); } catch {}
-    return orig?.apply(this, arguments);
+    return origAdditional?.apply(this, arguments);
   };
 
-  // ── Try data that's already on the window before our script ran ──
-  function tryExisting() {
-    // Legacy global (still present on some responses)
+  // ── 2. Intercept fetch ──────────────────────────────────────────────────────
+  // This is the key one — Instagram loads profile + post data via fetch to
+  // /api/v1/users/web_profile_info and /graphql/query. Intercepting the
+  // response gives us followers, post likes, comments, AND public_email.
+  const origFetch = window.fetch;
+  window.fetch = async function (...args) {
+    const response = await origFetch.apply(this, args);
     try {
-      tryExtract(window._sharedData?.entry_data?.ProfilePage?.[0]);
+      const url = (typeof args[0] === 'string' ? args[0] : args[0]?.url) || '';
+      if (
+        url.includes('web_profile_info') ||
+        url.includes('/graphql/query')   ||
+        url.includes('/api/v1/users/')
+      ) {
+        response.clone().json().then(data => {
+          tryExtract(data);
+          if (data?.data)     tryExtract(data.data);
+          if (data?.graphql)  tryExtract(data.graphql);
+        }).catch(() => {});
+      }
     } catch {}
+    return response;
+  };
 
-    // Newer: keyed object of component data
+  // ── 3. Intercept XHR (older Instagram code paths) ──────────────────────────
+  const origOpen = XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open = function (method, url, ...rest) {
+    this.__igUrl = url || '';
+    return origOpen.call(this, method, url, ...rest);
+  };
+
+  const origSend = XMLHttpRequest.prototype.send;
+  XMLHttpRequest.prototype.send = function (...args) {
+    if (
+      this.__igUrl?.includes('web_profile_info') ||
+      this.__igUrl?.includes('/graphql/query')
+    ) {
+      this.addEventListener('load', () => {
+        try { tryExtract(JSON.parse(this.responseText)); } catch {}
+      });
+    }
+    return origSend.apply(this, args);
+  };
+
+  // ── 4. Try already-loaded window globals ────────────────────────────────────
+  function tryExisting() {
+    try { tryExtract(window._sharedData?.entry_data?.ProfilePage?.[0]); } catch {}
     try {
       Object.values(window.__additionalData || {}).forEach(d => tryExtract(d?.data));
     } catch {}
-
-    // Some versions embed it as window.__initialData
     try {
       (window.__initialData?.pending || []).forEach(r => tryExtract(r?.result?.data));
     } catch {}

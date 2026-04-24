@@ -127,6 +127,12 @@ function extractFromDom(username) {
     profile.location = extractLocation(bioText);
   }
 
+  // Business accounts have a mailto: "Email" button — most reliable email source
+  if (!profile.email) {
+    const mailtoEl = document.querySelector('a[href^="mailto:"]');
+    if (mailtoEl) profile.email = mailtoEl.href.replace('mailto:', '').split('?')[0];
+  }
+
   // ── Followers — most reliable from og:description meta tag ──
   const meta = document.querySelector('meta[name="description"], meta[property="og:description"]');
   if (meta?.content) {
@@ -270,13 +276,20 @@ window.addEventListener('message', event => {
     if (rate > 0 && rate < 100) engagement = parseFloat(rate.toFixed(2));
   }
 
+  // public_email / business_email come from the API response on business accounts
+  const apiEmail = user.public_email || user.business_email || '';
+  const bioEmail = extractEmail(bio);
+  // Also check for mailto: links Instagram renders for business contact buttons
+  const mailtoEl = document.querySelector('a[href^="mailto:"]');
+  const mailtoEmail = mailtoEl ? mailtoEl.href.replace('mailto:', '').split('?')[0] : '';
+
   const richProfile = {
     username,
-    name:     user.full_name     || '',
+    name:       user.full_name || '',
     followers,
     engagement,
     bio,
-    email:    extractEmail(bio),
+    email:    apiEmail || mailtoEmail || bioEmail,
     location: user.city_name || user.location_city || extractLocation(bio),
     niche:    classifyNiche(`${user.category_name || ''} ${bio} ${username}`),
   };
@@ -293,14 +306,14 @@ function initPage() {
   // Inject the page-context script so it can intercept window.__additionalDataLoaded
   injectPageScript();
 
-  // Give the page-script 3 seconds to fire; if it hasn't by then, fall back to DOM parsing
+  // Give the page-script 5 seconds to fire (fetch interception); fall back to DOM parsing
   setTimeout(() => {
     if (syncInProgress || (syncCache[location.href] && Date.now() - syncCache[location.href] < COOLDOWN)) return;
     const domProfile = extractFromDom(username);
     if (domProfile.followers > 0 || domProfile.name) {
       triggerSync(domProfile);
     }
-  }, 3000);
+  }, 5000);
 }
 
 // ──────────────── SPA navigation detection (Instagram is a React SPA) ─────────
