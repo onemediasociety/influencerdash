@@ -1,6 +1,7 @@
 // Content script — runs on every instagram.com page.
-// Intercepts profile data from page-script, shows an overlay card on the page,
-// and lets the user sync to their Google Sheet with one click.
+// Silently accumulates profile data from page-script API interception.
+// Nothing is displayed or synced automatically — all display and sync
+// is triggered manually by the user via the extension popup.
 
 const BLOCKED = new Set([
   'p','reel','reels','explore','accounts','stories','tv','about','legal',
@@ -17,13 +18,6 @@ function parseCount(str) {
   const n = parseFloat(m[1]);
   const mult = { k: 1e3, m: 1e6, b: 1e9 }[m[2]?.toLowerCase()] || 1;
   return Math.round(n * mult);
-}
-
-function fmtNum(n) {
-  if (!n) return '—';
-  if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
-  if (n >= 1e3) return `${Math.round(n / 1e3)}K`;
-  return n.toLocaleString();
 }
 
 function extractEmail(text) {
@@ -63,9 +57,60 @@ const NICHES = [
   { name: 'Sustainability',         kw: /sustainable|eco|environment|green|zero.?waste|climate|organic|vegan/ },
 ];
 
-function classifyNiche(text) {
-  const lower = (text || '').toLowerCase();
-  for (const { name, kw } of NICHES) if (kw.test(lower)) return name;
+// Map Instagram's own category_name values to our niche labels.
+// Checked before keyword matching so business accounts get sensible niches.
+const IG_CATEGORY_MAP = {
+  'musician/band':          'Music',
+  'music':                  'Music',
+  'artist':                 'Art & Design',
+  'photographer':           'Art & Design',
+  'comedian':               'Comedy & Entertainment',
+  'actor':                  'Comedy & Entertainment',
+  'actress':                'Comedy & Entertainment',
+  'tv show':                'Comedy & Entertainment',
+  'film':                   'Comedy & Entertainment',
+  'podcast':                'Podcast & Media',
+  'news & media website':   'Podcast & Media',
+  'media/news company':     'Podcast & Media',
+  'blogger':                'Lifestyle',
+  'personal blog':          'Lifestyle',
+  'clothing (brand)':       'Fashion & Beauty',
+  'clothing store':         'Fashion & Beauty',
+  'beauty supply store':    'Fashion & Beauty',
+  'cosmetics store':        'Fashion & Beauty',
+  'health/beauty':          'Fitness & Health',
+  'gym/physical fitness':   'Fitness & Health',
+  'fitness model':          'Fitness & Health',
+  'nutritionist':           'Fitness & Health',
+  'restaurant':             'Food & Cuisine',
+  'food & beverage':        'Food & Cuisine',
+  'chef':                   'Food & Cuisine',
+  'travel company':         'Travel',
+  'hotel':                  'Travel',
+  'software':               'Technology',
+  'internet company':       'Technology',
+  'science website':        'Technology',
+  'entrepreneur':           'Business & Finance',
+  'business person':        'Business & Finance',
+  'financial service':      'Business & Finance',
+  'bank':                   'Business & Finance',
+  'sports team':            'Sports',
+  'athlete':                'Sports',
+  'sports league':          'Sports',
+  'school':                 'Education',
+  'college & university':   'Education',
+  'non-profit organization':'Sustainability',
+};
+
+function classifyNiche(categoryName, bio, username) {
+  // 1. Try Instagram's own category first (exact match on lowercased value)
+  const cat = (categoryName || '').toLowerCase().trim();
+  if (cat && IG_CATEGORY_MAP[cat]) return IG_CATEGORY_MAP[cat];
+
+  // 2. Keyword match on category + bio + username
+  const text = `${categoryName || ''} ${bio || ''} ${username || ''}`.toLowerCase();
+  for (const { name, kw } of NICHES) if (kw.test(text)) return name;
+
   return 'Lifestyle';
 }
 
@@ -155,7 +200,7 @@ function extractFromDom(username) {
     }
   }
 
-  profile.niche = classifyNiche(`${profile.bio} ${username}`);
+  profile.niche = classifyNiche('', profile.bio, username);
   return profile;
 }
 
@@ -169,237 +214,12 @@ function computeEngagementFromItems(items, followers) {
   return (rate > 0 && rate < 100) ? parseFloat(rate.toFixed(2)) : null;
 }
 
-// ─────────────────────────── overlay card ───────────────────────────────────
-
-let overlayEl      = null;
-let overlayMinimised = false;
-
-function removeOverlay() {
-  overlayEl?.remove();
-  overlayEl = null;
-}
-
-function showOverlay(profile) {
-  removeOverlay();
-
-  const card = document.createElement('div');
-  card.id = 'igdash-card';
-
-  const style = document.createElement('style');
-  style.textContent = `
-    #igdash-card {
-      position: fixed; bottom: 24px; right: 24px; z-index: 2147483647;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      width: 236px;
-      background: #fff;
-      border-radius: 14px;
-      box-shadow: 0 8px 32px rgba(0,0,0,.18), 0 0 0 1px rgba(124,58,237,.12);
-      overflow: hidden;
-    }
-    #igdash-card .ig-header {
-      background: linear-gradient(135deg, #7c3aed 0%, #ec4899 100%);
-      padding: 9px 12px;
-      display: flex; align-items: center; justify-content: space-between;
-      cursor: pointer; user-select: none;
-    }
-    #igdash-card .ig-brand { color: #fff; font-size: 11px; font-weight: 700; letter-spacing: .3px; }
-    #igdash-card .ig-header-actions { display: flex; gap: 4px; }
-    #igdash-card .ig-btn-sm {
-      background: rgba(255,255,255,.2); border: none; color: rgba(255,255,255,.9);
-      width: 20px; height: 20px; border-radius: 50%; cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 12px; line-height: 1; padding: 0;
-    }
-    #igdash-card .ig-btn-sm:hover { background: rgba(255,255,255,.35); }
-    #igdash-card .ig-body { padding: 11px 12px; }
-    #igdash-card .ig-stats {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 9px;
-    }
-    #igdash-card .ig-stat {
-      background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 8px; padding: 7px 9px;
-    }
-    #igdash-card .ig-stat-label {
-      font-size: 8px; font-weight: 600; color: #9ca3af;
-      text-transform: uppercase; letter-spacing: .5px; margin-bottom: 2px;
-    }
-    #igdash-card .ig-stat-val {
-      font-size: 17px; font-weight: 700;
-    }
-    #igdash-card .ig-stat-val.purple { color: #7c3aed; }
-    #igdash-card .ig-stat-val.green  { color: #059669; }
-    #igdash-card .ig-detail {
-      font-size: 11px; color: #374151; margin-bottom: 4px;
-      display: flex; align-items: center; gap: 5px;
-    }
-    #igdash-card .ig-detail span:first-child { color: #9ca3af; font-size: 10px; }
-    #igdash-card .ig-sync-btn {
-      width: 100%; margin-top: 9px; padding: 8px;
-      background: #7c3aed; color: #fff; border: none; border-radius: 8px;
-      font-size: 12px; font-weight: 600; cursor: pointer;
-      transition: background .15s;
-    }
-    #igdash-card .ig-sync-btn:hover:not(:disabled) { background: #6d28d9; }
-    #igdash-card .ig-sync-btn:disabled { opacity: .65; cursor: default; }
-    #igdash-card .ig-sync-btn.success { background: #059669; }
-    #igdash-card .ig-result {
-      font-size: 10px; text-align: center; margin-top: 5px; display: none;
-    }
-    #igdash-card .ig-result.err { color: #dc2626; display: block; }
-  `;
-  document.head.appendChild(style);
-
-  card.innerHTML = `
-    <div class="ig-header" id="igdash-header">
-      <span class="ig-brand">InfluencerDash</span>
-      <div class="ig-header-actions">
-        <button class="ig-btn-sm" id="igdash-min" title="Minimise">−</button>
-        <button class="ig-btn-sm" id="igdash-close" title="Close">×</button>
-      </div>
-    </div>
-    <div class="ig-body" id="igdash-body">
-      <div class="ig-stats">
-        <div class="ig-stat">
-          <div class="ig-stat-label">Followers</div>
-          <div class="ig-stat-val purple">${fmtNum(profile.followers)}</div>
-        </div>
-        <div class="ig-stat">
-          <div class="ig-stat-label">Engagement</div>
-          <div class="ig-stat-val green">${profile.engagement != null ? profile.engagement + '%' : '—'}</div>
-        </div>
-      </div>
-      ${profile.location ? `<div class="ig-detail"><span>📍</span>${profile.location}</div>` : ''}
-      ${profile.niche    ? `<div class="ig-detail"><span>🏷</span>${profile.niche}</div>`    : ''}
-      ${profile.email    ? `<div class="ig-detail"><span>✉</span>${profile.email}</div>`    : ''}
-      <button class="ig-sync-btn" id="igdash-sync">Sync to Sheet</button>
-      <div class="ig-result" id="igdash-result"></div>
-    </div>
-  `;
-
-  document.body.appendChild(card);
-  overlayEl = card;
-
-  // Minimise / expand
-  document.getElementById('igdash-min').addEventListener('click', e => {
-    e.stopPropagation();
-    const body = document.getElementById('igdash-body');
-    overlayMinimised = !overlayMinimised;
-    body.style.display = overlayMinimised ? 'none' : '';
-    document.getElementById('igdash-min').textContent = overlayMinimised ? '+' : '−';
-  });
-
-  document.getElementById('igdash-header').addEventListener('click', () => {
-    if (overlayMinimised) {
-      const body = document.getElementById('igdash-body');
-      overlayMinimised = false;
-      body.style.display = '';
-      document.getElementById('igdash-min').textContent = '−';
-    }
-  });
-
-  document.getElementById('igdash-close').addEventListener('click', e => {
-    e.stopPropagation();
-    removeOverlay();
-  });
-
-  document.getElementById('igdash-sync').addEventListener('click', async () => {
-    const btn    = document.getElementById('igdash-sync');
-    const result = document.getElementById('igdash-result');
-    btn.disabled    = true;
-    btn.textContent = 'Syncing…';
-    result.className = 'ig-result';
-
-    // Extension context becomes invalidated when the extension is reloaded while
-    // the tab is still open. chrome.runtime.id goes undefined in that state.
-    if (!chrome.runtime?.id) {
-      result.textContent = 'Extension was reloaded — refresh this page to continue';
-      result.className = 'ig-result err';
-      btn.textContent = 'Sync to Sheet';
-      btn.disabled = false;
-      return;
-    }
-
-    try {
-      const res = await chrome.runtime.sendMessage({ type: 'SYNC_PROFILE', profile });
-      if (res?.ok) {
-        const verb = res.action === 'added' ? 'Added' : 'Updated';
-        btn.textContent = `✓ ${verb} in sheet`;
-        btn.classList.add('success');
-      } else if (res?.error === 'SETUP_REQUIRED') {
-        result.textContent = 'Click the extension icon to set up first';
-        result.className = 'ig-result err';
-        btn.textContent = 'Sync to Sheet';
-        btn.disabled = false;
-      } else {
-        result.textContent = res?.error || 'Sync failed';
-        result.className = 'ig-result err';
-        btn.textContent = 'Sync to Sheet';
-        btn.disabled = false;
-      }
-    } catch (err) {
-      const isInvalidated = err.message?.includes('invalidated') || err.message?.includes('Extension context');
-      result.textContent = isInvalidated
-        ? 'Extension reloaded — refresh this page'
-        : err.message;
-      result.className = 'ig-result err';
-      btn.textContent = 'Sync to Sheet';
-      btn.disabled = false;
-    }
-  });
-}
-
 // ─── accumulated data from page-script messages ───────────────────────────────
+// Data accumulates silently. Nothing is shown or synced until the user
+// explicitly clicks the extension icon.
 
 let pendingProfile    = null;
 let pendingMediaItems = null;
-let overlayShown      = false;
-
-function buildProfileFromApi(username) {
-  if (!pendingProfile) return null;
-  const user        = pendingProfile;
-  const bio         = user.biography || '';
-  const followers   = user.follower_count ?? user.edge_followed_by?.count ?? 0;
-  const embedded    = user.edge_owner_to_timeline_media?.edges?.map(e => e.node) || [];
-  const allItems    = pendingMediaItems?.length ? pendingMediaItems : embedded;
-  const engagement  = computeEngagementFromItems(allItems, followers);
-  const apiEmail    = user.public_email || user.business_email || '';
-  const bioEmail    = extractEmail(bio);
-  const mailtoEl    = document.querySelector('a[href^="mailto:"]');
-  const mailtoEmail = mailtoEl ? mailtoEl.href.replace('mailto:', '').split('?')[0] : '';
-
-  return {
-    username,
-    name:       user.full_name || '',
-    followers,
-    engagement,
-    bio,
-    email:      apiEmail || mailtoEmail || bioEmail,
-    location:   user.city_name || user.location_city || extractLocation(bio),
-    niche:      classifyNiche(`${user.category_name || ''} ${bio} ${username}`),
-  };
-}
-
-function maybeShowOverlay(username) {
-  if (overlayShown) return;
-  let profile = buildProfileFromApi(username);
-  const dom   = extractFromDom(username);
-
-  if (!profile) {
-    profile = dom;
-  } else {
-    if (profile.followers === 0 && dom.followers > 0) {
-      profile.followers = dom.followers;
-      if (profile.engagement === null) profile.engagement = dom.engagement;
-    }
-    if (!profile.email    && dom.email)    profile.email    = dom.email;
-    if (!profile.location && dom.location) profile.location = dom.location;
-    if (!profile.name     && dom.name)     profile.name     = dom.name;
-  }
-
-  if (profile.followers > 0 || profile.name) {
-    overlayShown = true;
-    showOverlay(profile);
-  }
-}
 
 window.addEventListener('message', event => {
   if (event.source !== window || !event.data?.__igDash) return;
@@ -409,11 +229,6 @@ window.addEventListener('message', event => {
 
   if (event.data.__igDash === 'media') {
     pendingMediaItems = event.data.items;
-    // If profile already arrived, re-render overlay with engagement data
-    if (pendingProfile && overlayShown) {
-      overlayShown = false;
-      maybeShowOverlay(username);
-    }
     return;
   }
 
@@ -425,8 +240,6 @@ window.addEventListener('message', event => {
     ? (pendingProfile.follower_count ?? pendingProfile.edge_followed_by?.count ?? 0)
     : 0;
   if (!pendingProfile || newFollowers > curFollowers) pendingProfile = user;
-
-  maybeShowOverlay(username);
 });
 
 // ────────── GET_CURRENT_PROFILE — called by popup when user clicks icon ───────
@@ -440,8 +253,33 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return false;
   }
 
-  let profile = buildProfileFromApi(username);
-  const dom   = extractFromDom(username);
+  let profile = null;
+
+  if (pendingProfile) {
+    const user        = pendingProfile;
+    const bio         = user.biography || '';
+    const followers   = user.follower_count ?? user.edge_followed_by?.count ?? 0;
+    const embedded    = user.edge_owner_to_timeline_media?.edges?.map(e => e.node) || [];
+    const allItems    = pendingMediaItems?.length ? pendingMediaItems : embedded;
+    const engagement  = computeEngagementFromItems(allItems, followers);
+    const apiEmail    = user.public_email || user.business_email || '';
+    const bioEmail    = extractEmail(bio);
+    const mailtoEl    = document.querySelector('a[href^="mailto:"]');
+    const mailtoEmail = mailtoEl ? mailtoEl.href.replace('mailto:', '').split('?')[0] : '';
+
+    profile = {
+      username,
+      name:       user.full_name || '',
+      followers,
+      engagement,
+      bio,
+      email:      apiEmail || mailtoEmail || bioEmail,
+      location:   user.city_name || user.location_city || extractLocation(bio),
+      niche:      classifyNiche(user.category_name || '', bio, username),
+    };
+  }
+
+  const dom = extractFromDom(username);
 
   if (!profile) {
     profile = dom;
@@ -459,17 +297,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   return false;
 });
 
-// ──────────── DOM fallback — show overlay if API data never arrived ───────────
-
-function initPage() {
-  const username = getProfileUsername();
-  if (!username) return;
-
-  setTimeout(() => {
-    if (!overlayShown) maybeShowOverlay(username);
-  }, 4000);
-}
-
 // ──────────────────────── SPA navigation detection ───────────────────────────
 
 let lastPath = location.pathname;
@@ -479,13 +306,7 @@ const navObserver = new MutationObserver(() => {
     lastPath          = location.pathname;
     pendingProfile    = null;
     pendingMediaItems = null;
-    overlayShown      = false;
-    overlayMinimised  = false;
-    removeOverlay();
-    setTimeout(initPage, 1500);
   }
 });
 
 navObserver.observe(document.documentElement, { subtree: true, childList: true });
-
-initPage();
