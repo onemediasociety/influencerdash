@@ -34,6 +34,16 @@ function usernameToName(username) {
     .join(' ');
 }
 
+// Parse "1.2M", "12.5K", "1,234,567" → integer
+function parseFollowerStr(s) {
+  const clean = (s || '').replace(/,/g, '').trim();
+  const m = clean.match(/^([\d.]+)\s*([KMBkmb])?$/);
+  if (!m) return 0;
+  const n = parseFloat(m[1]);
+  const mult = { k: 1_000, m: 1_000_000, b: 1_000_000_000 }[m[2]?.toLowerCase()] || 1;
+  return Math.round(n * mult);
+}
+
 async function proxyFetch(url, timeout = 14000) {
   // allorigins wraps response in { contents: string }
   try {
@@ -54,6 +64,39 @@ async function proxyFetch(url, timeout = 14000) {
   } catch {}
 
   return null;
+}
+
+// DuckDuckGo search snippets include Instagram's meta description which contains
+// "X Followers, Y Following, Z Posts" — reliable when Instagram blocks direct access.
+async function searchForFollowers(username) {
+  const queries = [
+    `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(`site:instagram.com/${username}`)}`,
+    `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(`"@${username}" instagram`)}`,
+  ];
+  for (const searchUrl of queries) {
+    try {
+      const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(searchUrl)}`;
+      const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(12000) });
+      if (!res.ok) continue;
+      const data = await res.json();
+      const html = data.contents || '';
+      if (html.length < 500 || html.includes('captcha') || html.includes('unusual traffic')) continue;
+      const m = html.match(/([\d,.]+\s*[KMBkmb]?)\s*[Ff]ollowers[,\s]/);
+      if (m) {
+        const count = parseFollowerStr(m[1].trim());
+        if (count > 0) return count;
+      }
+    } catch {}
+  }
+  return 0;
+}
+
+function computeEngagement(posts, followers) {
+  if (!posts.length || followers <= 0) return null;
+  const avgLikes    = posts.reduce((s, p) => s + (p.node?.edge_liked_by?.count    || 0), 0) / posts.length;
+  const avgComments = posts.reduce((s, p) => s + (p.node?.edge_media_to_comment?.count || 0), 0) / posts.length;
+  const rate = (avgLikes + avgComments) / followers * 100;
+  return (rate > 0 && rate < 100) ? parseFloat(rate.toFixed(2)) : null;
 }
 
 export async function lookupInstagramProfile(input) {
@@ -81,18 +124,13 @@ export async function lookupInstagramProfile(input) {
     source: 'sheet',
   };
 
-  // --- Strategy 1: Instagram's internal JSON API (structured, easier to parse) ---
+  // --- Strategy 1: Instagram's internal JSON API ---
   let gotUserData = false;
   try {
-    const raw = await proxyFetch(
-      `https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`
-    );
+    const raw = await proxyFetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`);
     if (raw) {
       const json = JSON.parse(raw);
-      // Explicit "not found" signal from the API
-      if (json?.status === 'fail' || json?.message === 'user_not_found') {
-        return { ...result, notFound: true };
-      }
+      if (json?.status === 'fail' || json?.message === 'user_not_found') return { ...result, notFound: true };
       const user = json?.data?.user;
       if (user === null) return { ...result, notFound: true };
       if (user && (user.edge_followed_by?.count || user.biography != null)) {
@@ -102,53 +140,44 @@ export async function lookupInstagramProfile(input) {
         if (user.edge_followed_by?.count) result.followers = user.edge_followed_by.count;
         const bio = user.biography || '';
         result.email    = extractEmail(bio);
-        result.location = extractLocation(bio);
+        // Prefer the structured city/state field, fall back to bio text parsing
+        result.location = user.city_name || user.location_city || extractLocation(bio);
         result.niche    = classifyNiche(`${user.category_name || ''} ${bio} ${username}`);
-
-        // Engagement rate from post data bundled in the API response
         const posts = user.edge_owner_to_timeline_media?.edges || [];
-        if (posts.length >= 1 && result.followers > 0) {
-          const avgLikes    = posts.reduce((s, p) => s + (p.node?.edge_liked_by?.count    || 0), 0) / posts.length;
-          const avgComments = posts.reduce((s, p) => s + (p.node?.edge_media_to_comment?.count || 0), 0) / posts.length;
-          const rate = (avgLikes + avgComments) / result.followers * 100;
-          if (rate > 0 && rate < 100) result.engagement = parseFloat(rate.toFixed(2));
-        }
+        result.engagement = computeEngagement(posts, result.followers);
       }
     }
   } catch {}
 
-  // Return early only if Strategy 1 got everything including engagement
   if (gotUserData && result.engagement !== null) return result;
 
   // --- Strategy 2: profile HTML page ---
-  // Used as primary fallback, or as engagement supplement when Strategy 1 got user data but no post stats
   try {
     const html = await proxyFetch(`https://www.instagram.com/${username}/`);
     if (html && html.length > 1000) {
-      // Definitive "page not available" message from Instagram
       if (html.includes("Sorry, this page isn") || html.includes('page_not_found') || html.includes('"user_not_found"')) {
         return { ...result, notFound: true };
       }
-
       if (!gotUserData) {
         const bioMatch       = html.match(/"biography":"([^"]{0,600})"/);
         const nameMatch      = html.match(/"full_name":"([^"]+)"/);
         const followersMatch = html.match(/"edge_followed_by":\{"count":(\d+)\}/);
         const categoryMatch  = html.match(/"category_name":"([^"]+)"/i);
-
+        const cityMatch      = html.match(/"city_name":"([^"]+)"/i);
+        const ogDescMatch    = html.match(/property="og:description"\s+content="([^"]+)"/i)
+                            || html.match(/name="description"\s+content="([^"]+)"/i);
         const bio      = bioMatch  ? safeJsonDecode(bioMatch[1])  : '';
         const fullName = nameMatch ? safeJsonDecode(nameMatch[1]) : '';
-
         if (fullName)       result.name      = fullName;
         if (bio)            result.bio       = bio;
         if (followersMatch) result.followers = parseInt(followersMatch[1]);
-
         result.email    = extractEmail(bio);
-        result.location = extractLocation(bio);
+        // Try structured city first, then bio text, then og:description text
+        result.location = (cityMatch ? safeJsonDecode(cityMatch[1]) : '')
+          || extractLocation(bio)
+          || extractLocation(ogDescMatch ? ogDescMatch[1] : '');
         result.niche    = classifyNiche(`${categoryMatch ? categoryMatch[1] : ''} ${bio} ${username}`);
       }
-
-      // Try to derive engagement from embedded post data regardless of Strategy 1 outcome
       if (result.engagement === null && result.followers > 0) {
         const likesMatches    = [...html.matchAll(/"edge_liked_by":\{"count":(\d+)\}/g)].slice(0, 12);
         const commentsMatches = [...html.matchAll(/"edge_media_to_comment":\{"count":(\d+)\}/g)].slice(0, 12);
@@ -163,7 +192,40 @@ export async function lookupInstagramProfile(input) {
     }
   } catch {}
 
-  // If we still have no niche, derive from username alone
+  // --- Strategy 3: ?__a=1 JSON endpoint (sometimes still returns full GraphQL response) ---
+  if (result.engagement === null) {
+    try {
+      const raw = await proxyFetch(`https://www.instagram.com/${username}/?__a=1&__d=dis`);
+      if (raw) {
+        const json = JSON.parse(raw);
+        const user = json?.graphql?.user || json?.data?.user;
+        if (user) {
+          if (!gotUserData) {
+            if (user.full_name)               result.name      = user.full_name;
+            if (user.biography)               result.bio       = user.biography;
+            if (user.edge_followed_by?.count) result.followers = user.edge_followed_by.count;
+            const bio = user.biography || '';
+            result.email    = extractEmail(bio);
+            result.location = user.city_name || user.location_city || extractLocation(bio);
+            result.niche    = classifyNiche(`${user.category_name || ''} ${bio} ${username}`);
+            gotUserData = true;
+          }
+          const posts = user.edge_owner_to_timeline_media?.edges || [];
+          result.engagement = computeEngagement(posts, result.followers);
+        }
+      }
+    } catch {}
+  }
+
+  // --- Strategy 4: DuckDuckGo search snippet for follower count ---
+  // Instagram's cached meta descriptions reliably include "X Followers, Y Following, Z Posts".
+  if (result.followers === 0) {
+    try {
+      const count = await searchForFollowers(username);
+      if (count > 0) result.followers = count;
+    } catch {}
+  }
+
   if (!result.niche) result.niche = classifyNiche(username);
 
   return result;
