@@ -1,28 +1,21 @@
 import { useState } from 'react';
 import { useGoogleLogin } from '@react-oauth/google';
-import { X, Search, Loader2, AlertCircle, CheckCircle, UserPlus } from 'lucide-react';
+import { X, Search, Loader2, AlertCircle, CheckCircle, UserPlus, Users, TrendingUp, MapPin, Mail } from 'lucide-react';
 import { lookupInstagramProfile } from '../services/instagramLookup';
 import { appendInfluencerRow } from '../services/sheetsApi';
 import { useApp } from '../context/AppContext';
 
-function Field({ label, value, onChange }) {
-  return (
-    <div>
-      <label className="block text-xs font-medium text-gray-500 mb-1">{label}</label>
-      <input
-        type="text"
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-200 focus:border-purple-400"
-      />
-    </div>
-  );
+function fmt(n) {
+  if (!n) return null;
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
+  return n.toString();
 }
 
 export default function AddInfluencerModal({ onClose }) {
   const { sync } = useApp();
   const [step, setStep] = useState('input'); // input | searching | preview | saving | done | error
-  const [handle, setHandle] = useState('');
+  const [input, setInput] = useState('');
   const [profile, setProfile] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [token, setToken] = useState(null);
@@ -40,11 +33,16 @@ export default function AddInfluencerModal({ onClose }) {
   });
 
   async function search() {
-    if (!handle.trim()) return;
+    if (!input.trim()) return;
     setStep('searching');
     setErrorMsg('');
     try {
-      const result = await lookupInstagramProfile(handle.trim());
+      const result = await lookupInstagramProfile(input.trim());
+      if (result.notFound) {
+        setErrorMsg('This Instagram account was not found. Double-check the handle or URL.');
+        setStep('error');
+        return;
+      }
       setProfile(result);
       setStep('preview');
     } catch (err) {
@@ -88,28 +86,25 @@ export default function AddInfluencerModal({ onClose }) {
           {/* Step: input */}
           {(step === 'input' || step === 'searching') && (
             <div className="space-y-4">
-              <p className="text-sm text-gray-500">Enter an Instagram handle and we'll look up their profile info automatically.</p>
+              <p className="text-sm text-gray-500">Paste an Instagram handle or profile URL — we'll pull in their info automatically.</p>
               <div className="flex gap-2">
-                <div className="flex-1 relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">@</span>
-                  <input
-                    type="text"
-                    value={handle}
-                    onChange={e => setHandle(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && search()}
-                    placeholder="username"
-                    autoFocus
-                    disabled={step === 'searching'}
-                    className="w-full pl-7 pr-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-200 focus:border-purple-400 disabled:opacity-50"
-                  />
-                </div>
+                <input
+                  type="text"
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && search()}
+                  placeholder="@username or instagram.com/username"
+                  autoFocus
+                  disabled={step === 'searching'}
+                  className="flex-1 px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-200 focus:border-purple-400 disabled:opacity-50"
+                />
                 <button
                   onClick={search}
-                  disabled={!handle.trim() || step === 'searching'}
+                  disabled={!input.trim() || step === 'searching'}
                   className="flex items-center gap-2 px-4 py-2.5 bg-purple-600 text-white text-sm font-medium rounded-xl hover:bg-purple-700 transition-colors disabled:opacity-50"
                 >
                   {step === 'searching' ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />}
-                  {step === 'searching' ? 'Searching…' : 'Search'}
+                  {step === 'searching' ? 'Looking up…' : 'Look up'}
                 </button>
               </div>
             </div>
@@ -124,36 +119,46 @@ export default function AddInfluencerModal({ onClose }) {
                   src={profile.avatar}
                   onError={e => { e.target.src = profile.avatarFallback; }}
                   alt={profile.name}
-                  className="w-14 h-14 rounded-full object-cover bg-gray-100 flex-shrink-0"
+                  className="w-14 h-14 rounded-full object-cover bg-gray-100 ring-2 ring-purple-100 flex-shrink-0"
                 />
                 <div>
-                  <p className="font-semibold text-gray-900">{profile.handle}</p>
-                  {profile.followers > 0 && (
-                    <p className="text-sm text-gray-500">{profile.followers.toLocaleString()} followers</p>
-                  )}
+                  <p className="font-semibold text-gray-900">{profile.name}</p>
+                  <p className="text-sm text-purple-600">{profile.handle}</p>
                 </div>
+              </div>
+
+              {/* Stats row */}
+              <div className="flex flex-wrap gap-2">
+                {profile.followers > 0 && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-purple-50 text-purple-700 text-xs font-medium rounded-full">
+                    <Users size={12} /> {fmt(profile.followers)} followers
+                  </span>
+                )}
+                {profile.engagement != null && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-green-50 text-green-700 text-xs font-medium rounded-full">
+                    <TrendingUp size={12} /> {profile.engagement}% engagement
+                  </span>
+                )}
+                {profile.location && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-50 text-gray-600 text-xs font-medium rounded-full">
+                    <MapPin size={12} /> {profile.location}
+                  </span>
+                )}
+                {profile.niche && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-pink-50 text-pink-700 text-xs font-medium rounded-full">
+                    {profile.niche}
+                  </span>
+                )}
+                {profile.email && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 text-xs font-medium rounded-full">
+                    <Mail size={12} /> {profile.email}
+                  </span>
+                )}
               </div>
 
               {profile.bio && (
                 <p className="text-xs text-gray-500 bg-gray-50 rounded-lg p-3 leading-relaxed line-clamp-3">{profile.bio}</p>
               )}
-
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Name" value={profile.name} onChange={v => setProfile(p => ({ ...p, name: v }))} />
-                <Field label="Niche" value={profile.niche} onChange={v => setProfile(p => ({ ...p, niche: v }))} />
-                <Field label="Location" value={profile.location} onChange={v => setProfile(p => ({ ...p, location: v }))} />
-                <Field label="Email" value={profile.email} onChange={v => setProfile(p => ({ ...p, email: v }))} />
-                <Field
-                  label="Followers"
-                  value={profile.followers > 0 ? String(profile.followers) : ''}
-                  onChange={v => setProfile(p => ({ ...p, followers: parseInt(v.replace(/,/g, '')) || 0 }))}
-                />
-                <Field
-                  label="Engagement Rate (%)"
-                  value={profile.engagement != null ? String(profile.engagement) : ''}
-                  onChange={v => setProfile(p => ({ ...p, engagement: parseFloat(v) || null }))}
-                />
-              </div>
 
               <div className="flex gap-2 pt-1">
                 <button
@@ -166,7 +171,7 @@ export default function AddInfluencerModal({ onClose }) {
                   onClick={handleSave}
                   className="flex-1 px-4 py-2.5 bg-purple-600 text-white text-sm font-medium rounded-xl hover:bg-purple-700 transition-colors"
                 >
-                  Save to Sheet
+                  Add to Sheet
                 </button>
               </div>
             </div>
@@ -187,7 +192,7 @@ export default function AddInfluencerModal({ onClose }) {
               <p className="text-sm font-medium text-gray-800">{profile?.handle} added to your sheet!</p>
               <div className="flex gap-2 w-full mt-1">
                 <button
-                  onClick={() => { setStep('input'); setHandle(''); setProfile(null); }}
+                  onClick={() => { setStep('input'); setInput(''); setProfile(null); }}
                   className="flex-1 px-4 py-2 border border-gray-200 text-sm font-medium text-gray-600 rounded-xl hover:bg-gray-50 transition-colors"
                 >
                   Add Another

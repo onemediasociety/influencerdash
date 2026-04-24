@@ -35,21 +35,24 @@ function usernameToName(username) {
 }
 
 async function proxyFetch(url, timeout = 14000) {
-  const proxies = [
-    raw => `https://api.allorigins.win/get?url=${encodeURIComponent(raw)}`,
-    raw => `https://corsproxy.io/?url=${encodeURIComponent(raw)}`,
-  ];
-  for (const makeProxy of proxies) {
-    try {
-      const res = await fetch(makeProxy(url), { signal: AbortSignal.timeout(timeout) });
-      if (!res.ok) continue;
+  // allorigins wraps response in { contents: string }
+  try {
+    const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(timeout) });
+    if (res.ok) {
       const body = await res.json().catch(() => null);
-      if (!body) continue;
-      // allorigins wraps in { contents }, corsproxy returns the JSON directly
-      const contents = body.contents !== undefined ? body.contents : JSON.stringify(body);
-      if (contents) return contents;
-    } catch {}
-  }
+      if (body?.contents) return body.contents;
+    }
+  } catch {}
+
+  // corsproxy returns the raw response body directly (text or JSON)
+  try {
+    const res = await fetch(`https://corsproxy.io/?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(timeout) });
+    if (res.ok) {
+      const text = await res.text().catch(() => null);
+      if (text) return text;
+    }
+  } catch {}
+
   return null;
 }
 
@@ -79,6 +82,7 @@ export async function lookupInstagramProfile(input) {
   };
 
   // --- Strategy 1: Instagram's internal JSON API (structured, easier to parse) ---
+  let gotUserData = false;
   try {
     const raw = await proxyFetch(
       `https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`
@@ -92,6 +96,7 @@ export async function lookupInstagramProfile(input) {
       const user = json?.data?.user;
       if (user === null) return { ...result, notFound: true };
       if (user && (user.edge_followed_by?.count || user.biography != null)) {
+        gotUserData = true;
         if (user.full_name)               result.name      = user.full_name;
         if (user.biography)               result.bio       = user.biography;
         if (user.edge_followed_by?.count) result.followers = user.edge_followed_by.count;
@@ -102,19 +107,21 @@ export async function lookupInstagramProfile(input) {
 
         // Engagement rate from post data bundled in the API response
         const posts = user.edge_owner_to_timeline_media?.edges || [];
-        if (posts.length >= 3 && result.followers > 0) {
+        if (posts.length >= 1 && result.followers > 0) {
           const avgLikes    = posts.reduce((s, p) => s + (p.node?.edge_liked_by?.count    || 0), 0) / posts.length;
-          const avgComments = posts.reduce((s, p) => s + (p.node?.edge_media_to_comment?.count || 0) , 0) / posts.length;
+          const avgComments = posts.reduce((s, p) => s + (p.node?.edge_media_to_comment?.count || 0), 0) / posts.length;
           const rate = (avgLikes + avgComments) / result.followers * 100;
           if (rate > 0 && rate < 100) result.engagement = parseFloat(rate.toFixed(2));
         }
-
-        return result;
       }
     }
   } catch {}
 
+  // Return early only if Strategy 1 got everything including engagement
+  if (gotUserData && result.engagement !== null) return result;
+
   // --- Strategy 2: profile HTML page ---
+  // Used as primary fallback, or as engagement supplement when Strategy 1 got user data but no post stats
   try {
     const html = await proxyFetch(`https://www.instagram.com/${username}/`);
     if (html && html.length > 1000) {
@@ -122,27 +129,30 @@ export async function lookupInstagramProfile(input) {
       if (html.includes("Sorry, this page isn") || html.includes('page_not_found') || html.includes('"user_not_found"')) {
         return { ...result, notFound: true };
       }
-      const bioMatch       = html.match(/"biography":"([^"]{0,600})"/);
-      const nameMatch      = html.match(/"full_name":"([^"]+)"/);
-      const followersMatch = html.match(/"edge_followed_by":\{"count":(\d+)\}/);
-      const categoryMatch  = html.match(/"category_name":"([^"]+)"/i);
 
-      const bio      = bioMatch  ? safeJsonDecode(bioMatch[1])  : '';
-      const fullName = nameMatch ? safeJsonDecode(nameMatch[1]) : '';
+      if (!gotUserData) {
+        const bioMatch       = html.match(/"biography":"([^"]{0,600})"/);
+        const nameMatch      = html.match(/"full_name":"([^"]+)"/);
+        const followersMatch = html.match(/"edge_followed_by":\{"count":(\d+)\}/);
+        const categoryMatch  = html.match(/"category_name":"([^"]+)"/i);
 
-      if (fullName)      result.name      = fullName;
-      if (bio)           result.bio       = bio;
-      if (followersMatch) result.followers = parseInt(followersMatch[1]);
+        const bio      = bioMatch  ? safeJsonDecode(bioMatch[1])  : '';
+        const fullName = nameMatch ? safeJsonDecode(nameMatch[1]) : '';
 
-      result.email    = extractEmail(bio);
-      result.location = extractLocation(bio);
-      result.niche    = classifyNiche(`${categoryMatch ? categoryMatch[1] : ''} ${bio} ${username}`);
+        if (fullName)       result.name      = fullName;
+        if (bio)            result.bio       = bio;
+        if (followersMatch) result.followers = parseInt(followersMatch[1]);
 
-      // Best-effort engagement rate from recent post likes + comments
-      if (result.followers > 0) {
+        result.email    = extractEmail(bio);
+        result.location = extractLocation(bio);
+        result.niche    = classifyNiche(`${categoryMatch ? categoryMatch[1] : ''} ${bio} ${username}`);
+      }
+
+      // Try to derive engagement from embedded post data regardless of Strategy 1 outcome
+      if (result.engagement === null && result.followers > 0) {
         const likesMatches    = [...html.matchAll(/"edge_liked_by":\{"count":(\d+)\}/g)].slice(0, 12);
         const commentsMatches = [...html.matchAll(/"edge_media_to_comment":\{"count":(\d+)\}/g)].slice(0, 12);
-        if (likesMatches.length >= 3) {
+        if (likesMatches.length >= 1) {
           const avgLikes    = likesMatches.reduce((s, m) => s + parseInt(m[1]), 0) / likesMatches.length;
           const avgComments = commentsMatches.length > 0
             ? commentsMatches.reduce((s, m) => s + parseInt(m[1]), 0) / commentsMatches.length : 0;
