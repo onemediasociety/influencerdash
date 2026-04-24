@@ -203,8 +203,21 @@ async function syncToSheet(profile) {
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === 'SYNC_PROFILE') {
     syncToSheet(message.profile)
-      .then(result => sendResponse({ ok: true, ...result }))
-      .catch(err   => sendResponse({ ok: false, error: err.message }));
+      .then(result => {
+        // Persist last sync so the popup can display it
+        chrome.storage.local.get('sessionCount', ({ sessionCount }) => {
+          chrome.storage.local.set({
+            lastSync: {
+              profile: message.profile,
+              action: result.action,
+              timestamp: Date.now(),
+            },
+            sessionCount: (sessionCount || 0) + 1,
+          });
+        });
+        sendResponse({ ok: true, ...result });
+      })
+      .catch(err => sendResponse({ ok: false, error: err.message }));
     return true; // keep the message channel open for the async response
   }
 

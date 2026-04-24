@@ -12,15 +12,146 @@
       background: #fff;
     }
 
+    /* ── Header ── */
     .header {
       background: linear-gradient(135deg, #7c3aed 0%, #ec4899 100%);
-      padding: 16px 18px;
+      padding: 14px 18px;
       color: white;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
     }
-    .header h1 { font-size: 14px; font-weight: 700; letter-spacing: -.2px; }
-    .header p  { font-size: 11px; opacity: .8; margin-top: 2px; }
+    .header h1 { font-size: 13px; font-weight: 700; }
+    .header p  { font-size: 10px; opacity: .75; margin-top: 1px; }
+    .header-actions { display: flex; gap: 6px; }
+    .icon-btn {
+      background: rgba(255,255,255,.2);
+      border: none;
+      color: white;
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px;
+      transition: background .15s;
+    }
+    .icon-btn:hover { background: rgba(255,255,255,.35); }
 
-    .body { padding: 16px 18px; display: flex; flex-direction: column; gap: 14px; }
+    /* ── Shared ── */
+    .body { padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+
+    .pill {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 10px; border-radius: 20px;
+      font-size: 11px; font-weight: 600;
+    }
+    .pill.green { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+    .pill.gray  { background: #f3f4f6; color: #6b7280; border: 1px solid #e5e7eb; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; }
+    .dot.green  { background: #22c55e; }
+    .dot.gray   { background: #9ca3af; }
+
+    /* ── Dashboard view ── */
+    #dashboard { display: none; flex-direction: column; gap: 12px; }
+    #dashboard.visible { display: flex; }
+
+    .last-sync-card {
+      background: #faf5ff;
+      border: 1px solid #ede9fe;
+      border-radius: 10px;
+      padding: 12px;
+    }
+    .last-sync-card .card-label {
+      font-size: 10px;
+      font-weight: 600;
+      color: #7c3aed;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      margin-bottom: 8px;
+    }
+    .profile-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .avatar {
+      width: 40px; height: 40px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #7c3aed, #ec4899);
+      display: flex; align-items: center; justify-content: center;
+      color: white; font-weight: 700; font-size: 15px;
+      flex-shrink: 0;
+      overflow: hidden;
+    }
+    .avatar img { width: 100%; height: 100%; object-fit: cover; }
+    .profile-meta .name  { font-size: 13px; font-weight: 700; color: #111; }
+    .profile-meta .handle { font-size: 11px; color: #7c3aed; }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+    .stat {
+      background: white;
+      border: 1px solid #e9d5ff;
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+    .stat .stat-label { font-size: 9px; font-weight: 600; color: #9ca3af; text-transform: uppercase; letter-spacing: .4px; }
+    .stat .stat-value { font-size: 15px; font-weight: 700; color: #111; margin-top: 1px; }
+    .stat .stat-value.purple { color: #7c3aed; }
+    .stat .stat-value.green  { color: #059669; }
+    .stat-full {
+      background: white;
+      border: 1px solid #e9d5ff;
+      border-radius: 8px;
+      padding: 8px 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: #374151;
+    }
+    .stat-full .tag { font-size: 10px; color: #9ca3af; flex-shrink: 0; }
+
+    .action-badge {
+      display: inline-block;
+      font-size: 10px; font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 10px;
+      margin-left: 4px;
+    }
+    .action-badge.added   { background: #dcfce7; color: #166534; }
+    .action-badge.updated { background: #dbeafe; color: #1e40af; }
+
+    .sync-time { font-size: 10px; color: #9ca3af; text-align: right; margin-top: 6px; }
+
+    .session-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 8px 12px;
+    }
+    .session-row .label { font-size: 11px; color: #6b7280; }
+    .session-row .count { font-size: 18px; font-weight: 700; color: #7c3aed; }
+
+    .no-sync-yet {
+      text-align: center;
+      padding: 16px 0;
+      font-size: 12px;
+      color: #9ca3af;
+      line-height: 1.5;
+    }
+    .no-sync-yet .emoji { font-size: 28px; display: block; margin-bottom: 6px; }
+
+    /* ── Setup view ── */
+    #setup { display: none; flex-direction: column; gap: 12px; }
+    #setup.visible { display: flex; }
 
     .status {
       font-size: 12px;
@@ -39,8 +170,8 @@
       border-radius: 8px;
       padding: 10px 12px;
     }
-    .redirect-box .label { font-size: 11px; font-weight: 600; color: #6d28d9; margin-bottom: 4px; }
-    .redirect-box .hint  { font-size: 11px; color: #7c3aed; opacity: .8; margin-bottom: 6px; line-height: 1.4; }
+    .redirect-box .rlabel { font-size: 11px; font-weight: 600; color: #6d28d9; margin-bottom: 3px; }
+    .redirect-box .rhint  { font-size: 10px; color: #7c3aed; opacity: .8; margin-bottom: 6px; line-height: 1.4; }
     .redirect-box code {
       font-size: 10px;
       word-break: break-all;
@@ -50,14 +181,12 @@
       border-radius: 4px;
       display: block;
       user-select: all;
+      cursor: text;
     }
 
     .field label {
-      font-size: 11px;
-      font-weight: 600;
-      color: #374151;
-      display: block;
-      margin-bottom: 4px;
+      font-size: 11px; font-weight: 600; color: #374151;
+      display: block; margin-bottom: 4px;
     }
     .field input {
       width: 100%;
@@ -69,26 +198,15 @@
       transition: border-color .15s;
     }
     .field input:focus { border-color: #7c3aed; box-shadow: 0 0 0 2px #ede9fe; }
-    .field .hint {
-      font-size: 10px;
-      color: #9ca3af;
-      margin-top: 4px;
-      line-height: 1.4;
-    }
+    .field .hint { font-size: 10px; color: #9ca3af; margin-top: 4px; line-height: 1.4; }
     .field .hint a { color: #7c3aed; text-decoration: none; }
     .field .hint a:hover { text-decoration: underline; }
 
     .btn {
-      width: 100%;
-      padding: 10px;
-      border: none;
-      border-radius: 8px;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background .15s;
+      width: 100%; padding: 10px; border: none; border-radius: 8px;
+      font-size: 13px; font-weight: 600; cursor: pointer; transition: background .15s;
     }
-    .btn-primary { background: #7c3aed; color: #fff; }
+    .btn-primary   { background: #7c3aed; color: #fff; }
     .btn-primary:hover { background: #6d28d9; }
     .btn-secondary { background: #fff; color: #6b7280; border: 1px solid #e5e7eb; }
     .btn-secondary:hover { background: #f9fafb; }
@@ -98,16 +216,34 @@
 </head>
 <body>
   <div class="header">
-    <h1>InfluencerDash — Sheet Sync</h1>
-    <p>Auto-captures Instagram profiles into your Google Sheet</p>
+    <div>
+      <h1>InfluencerDash</h1>
+      <p>Instagram → Google Sheet sync</p>
+    </div>
+    <div class="header-actions">
+      <button class="icon-btn" id="settings-btn" title="Settings">⚙️</button>
+    </div>
   </div>
 
-  <div class="body">
+  <!-- ── Dashboard view ── -->
+  <div class="body" id="dashboard">
+    <div style="display:flex; align-items:center; justify-content:space-between;">
+      <span class="pill green" id="conn-pill">
+        <span class="dot green"></span> Connected
+      </span>
+      <span id="session-badge" style="font-size:11px;color:#9ca3af;"></span>
+    </div>
+
+    <div id="last-sync-area"></div>
+  </div>
+
+  <!-- ── Setup / Settings view ── -->
+  <div class="body" id="setup">
     <div id="status" class="status"></div>
 
     <div class="redirect-box">
-      <div class="label">Step 1 — Add this redirect URI</div>
-      <div class="hint">In Google Cloud Console → APIs &amp; Services → Credentials → your OAuth client → Authorized redirect URIs:</div>
+      <div class="rlabel">Step 1 — Add this redirect URI</div>
+      <div class="rhint">Google Cloud Console → your OAuth client → Authorized redirect URIs:</div>
       <code id="redirect-url">Loading…</code>
     </div>
 
@@ -115,12 +251,8 @@
       <label>Step 2 — Google OAuth Client ID</label>
       <input id="client-id" type="text" placeholder="xxxx.apps.googleusercontent.com" autocomplete="off" />
       <div class="hint">
-        Create one at
-        <a href="https://console.cloud.google.com/apis/credentials" target="_blank">
-          Google Cloud Console
-        </a>
-        (type: Web Application, Sheets API enabled).
-        You can reuse your existing web-app client ID — just add the redirect URI above.
+        Reuse your existing web-app client — just add the redirect URI above. Or create one at
+        <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console</a>.
       </div>
     </div>
 
@@ -130,9 +262,7 @@
     </div>
 
     <button id="save-btn" class="btn btn-primary">Save &amp; Connect</button>
-
     <hr>
-
     <button id="sign-out-btn" class="btn btn-secondary">Sign out of Google</button>
   </div>
 
