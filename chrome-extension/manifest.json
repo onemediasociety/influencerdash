@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "InfluencerDash — Sheet Sync",
+  "version": "1.0",
+  "description": "Visit any Instagram profile to automatically capture follower count, engagement rate, and contact info into your Google Sheet.",
+  "permissions": ["identity", "storage"],
+  "host_permissions": [
+    "https://www.instagram.com/*",
+    "https://sheets.googleapis.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.instagram.com/*"],
+      "js": ["content-script.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["page-script.js"],
+      "matches": ["https://www.instagram.com/*"]
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "InfluencerDash"
+  }
+}

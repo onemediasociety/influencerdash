@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      width: 320px;
+      color: #111827;
+      background: #fff;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #7c3aed 0%, #ec4899 100%);
+      padding: 16px 18px;
+      color: white;
+    }
+    .header h1 { font-size: 14px; font-weight: 700; letter-spacing: -.2px; }
+    .header p  { font-size: 11px; opacity: .8; margin-top: 2px; }
+
+    .body { padding: 16px 18px; display: flex; flex-direction: column; gap: 14px; }
+
+    .status {
+      font-size: 12px;
+      padding: 9px 12px;
+      border-radius: 8px;
+      line-height: 1.4;
+      display: none;
+    }
+    .status.visible { display: block; }
+    .status.ok  { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+    .status.err { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+
+    .redirect-box {
+      background: #faf5ff;
+      border: 1px solid #ede9fe;
+      border-radius: 8px;
+      padding: 10px 12px;
+    }
+    .redirect-box .label { font-size: 11px; font-weight: 600; color: #6d28d9; margin-bottom: 4px; }
+    .redirect-box .hint  { font-size: 11px; color: #7c3aed; opacity: .8; margin-bottom: 6px; line-height: 1.4; }
+    .redirect-box code {
+      font-size: 10px;
+      word-break: break-all;
+      color: #5b21b6;
+      background: #ede9fe;
+      padding: 4px 6px;
+      border-radius: 4px;
+      display: block;
+      user-select: all;
+    }
+
+    .field label {
+      font-size: 11px;
+      font-weight: 600;
+      color: #374151;
+      display: block;
+      margin-bottom: 4px;
+    }
+    .field input {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 12px;
+      outline: none;
+      transition: border-color .15s;
+    }
+    .field input:focus { border-color: #7c3aed; box-shadow: 0 0 0 2px #ede9fe; }
+    .field .hint {
+      font-size: 10px;
+      color: #9ca3af;
+      margin-top: 4px;
+      line-height: 1.4;
+    }
+    .field .hint a { color: #7c3aed; text-decoration: none; }
+    .field .hint a:hover { text-decoration: underline; }
+
+    .btn {
+      width: 100%;
+      padding: 10px;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .btn-primary { background: #7c3aed; color: #fff; }
+    .btn-primary:hover { background: #6d28d9; }
+    .btn-secondary { background: #fff; color: #6b7280; border: 1px solid #e5e7eb; }
+    .btn-secondary:hover { background: #f9fafb; }
+
+    hr { border: none; border-top: 1px solid #f3f4f6; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>InfluencerDash — Sheet Sync</h1>
+    <p>Auto-captures Instagram profiles into your Google Sheet</p>
+  </div>
+
+  <div class="body">
+    <div id="status" class="status"></div>
+
+    <div class="redirect-box">
+      <div class="label">Step 1 — Add this redirect URI</div>
+      <div class="hint">In Google Cloud Console → APIs &amp; Services → Credentials → your OAuth client → Authorized redirect URIs:</div>
+      <code id="redirect-url">Loading…</code>
+    </div>
+
+    <div class="field">
+      <label>Step 2 — Google OAuth Client ID</label>
+      <input id="client-id" type="text" placeholder="xxxx.apps.googleusercontent.com" autocomplete="off" />
+      <div class="hint">
+        Create one at
+        <a href="https://console.cloud.google.com/apis/credentials" target="_blank">
+          Google Cloud Console
+        </a>
+        (type: Web Application, Sheets API enabled).
+        You can reuse your existing web-app client ID — just add the redirect URI above.
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Google Sheet ID <span style="font-weight:400;color:#9ca3af">(optional)</span></label>
+      <input id="sheet-id" type="text" placeholder="Leave blank to use the default InfluencerDash sheet" autocomplete="off" />
+    </div>
+
+    <button id="save-btn" class="btn btn-primary">Save &amp; Connect</button>
+
+    <hr>
+
+    <button id="sign-out-btn" class="btn btn-secondary">Sign out of Google</button>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
