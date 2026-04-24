@@ -308,6 +308,16 @@ function showOverlay(profile) {
     btn.textContent = 'Syncing…';
     result.className = 'ig-result';
 
+    // Extension context becomes invalidated when the extension is reloaded while
+    // the tab is still open. chrome.runtime.id goes undefined in that state.
+    if (!chrome.runtime?.id) {
+      result.textContent = 'Extension was reloaded — refresh this page to continue';
+      result.className = 'ig-result err';
+      btn.textContent = 'Sync to Sheet';
+      btn.disabled = false;
+      return;
+    }
+
     try {
       const res = await chrome.runtime.sendMessage({ type: 'SYNC_PROFILE', profile });
       if (res?.ok) {
@@ -326,7 +336,10 @@ function showOverlay(profile) {
         btn.disabled = false;
       }
     } catch (err) {
-      result.textContent = err.message;
+      const isInvalidated = err.message?.includes('invalidated') || err.message?.includes('Extension context');
+      result.textContent = isInvalidated
+        ? 'Extension reloaded — refresh this page'
+        : err.message;
       result.className = 'ig-result err';
       btn.textContent = 'Sync to Sheet';
       btn.disabled = false;

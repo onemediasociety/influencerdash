@@ -112,7 +112,10 @@ function renderCaptureProfile(profile) {
         btn.textContent    = 'Sync to Sheet';
       }
     } catch (err) {
-      result.textContent = `Error: ${err.message}`;
+      const isInvalidated = err.message?.includes('invalidated') || err.message?.includes('Extension context');
+      result.textContent = isInvalidated
+        ? 'Extension was reloaded — close and reopen this popup'
+        : `Error: ${err.message}`;
       result.className   = 'status visible err';
       btn.disabled       = false;
       btn.textContent    = 'Sync to Sheet';
