@@ -198,6 +198,9 @@ async function syncToSheet(profile) {
   }
 }
 
+// Reset session count each time the service worker starts (i.e. extension reload or browser start)
+chrome.storage.local.set({ sessionCount: 0 });
+
 // ─────────────────────────── message handler ─────────────────────────────────
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
