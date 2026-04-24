@@ -49,7 +49,7 @@ export default function InfluencerModal({ influencer, onClose }) {
           </button>
           <div className="px-6 pb-4">
             <div className="flex items-end gap-4 -mt-8">
-              <Avatar src={influencer.avatar} name={influencer.name} size={80} ringClass="ring-4 ring-white" />
+              <Avatar username={influencer.handle?.replace(/^@/, '')} name={influencer.name} size={80} ringClass="ring-4 ring-white" />
               <div className="mb-1 flex-1 min-w-0">
                 <h2 className="text-xl font-bold text-gray-900 truncate">{influencer.name}</h2>
                 <p className="text-purple-600 text-sm">{influencer.handle}</p>
