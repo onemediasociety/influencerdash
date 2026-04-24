@@ -72,16 +72,7 @@ function getProfileUsername() {
   return segment.toLowerCase();
 }
 
-// ──────────────────────── page-script injection ──────────────────────────────
-
-function injectPageScript() {
-  const s = document.createElement('script');
-  s.src = chrome.runtime.getURL('page-script.js');
-  s.onload = () => s.remove();
-  (document.head || document.documentElement).prepend(s);
-}
-
-// ─────────────────────── DOM-based data extraction ───────────────────────────
+//─────────────────────── DOM-based data extraction ───────────────────────────
 // Fallback when the page-script injection can't get post data (e.g. the data
 // was already loaded before our script ran). Reads what's visible in the DOM.
 
@@ -337,10 +328,8 @@ function initPage() {
   const username = getProfileUsername();
   if (!username) return;
 
-  // Inject the page-context script so it can intercept window.__additionalDataLoaded
-  injectPageScript();
-
-  // Give the page-script 5 seconds to fire (fetch interception); fall back to DOM parsing
+  // page-script.js runs as a MAIN-world content script (manifest.json) so no injection needed.
+  // Give it 5 seconds to capture the API response; fall back to DOM parsing if it doesn't.
   setTimeout(() => {
     if (syncInProgress || (syncCache[location.href] && Date.now() - syncCache[location.href] < COOLDOWN)) return;
     const domProfile = extractFromDom(username);
