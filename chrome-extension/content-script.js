@@ -254,47 +254,81 @@ async function triggerSync(profile) {
   }
 }
 
-// ────────────── listener for data posted from page-script.js ─────────────────
+// ─── accumulated data from page-script messages ───────────────────────────────
+// Profile and media arrive in separate API responses; we merge them.
+let pendingProfile = null;
+let pendingMediaItems = null;
 
-window.addEventListener('message', event => {
-  if (event.source !== window || !event.data?.__igDash) return;
-  const user = event.data.user;
-  if (!user) return;
+function computeEngagementFromItems(items, followers) {
+  if (!items?.length || followers <= 0) return null;
+  // New REST API uses like_count/comment_count; old GraphQL uses edge_liked_by.count
+  const avgLikes    = items.reduce((s, p) => s + (p.like_count    ?? p.edge_liked_by?.count    ?? 0), 0) / items.length;
+  const avgComments = items.reduce((s, p) => s + (p.comment_count ?? p.edge_media_to_comment?.count ?? 0), 0) / items.length;
+  const rate = (avgLikes + avgComments) / followers * 100;
+  return (rate > 0 && rate < 100) ? parseFloat(rate.toFixed(2)) : null;
+}
 
+function buildAndSync(user, mediaItems) {
   const username = getProfileUsername();
-  if (!username || user.username?.toLowerCase() !== username) return;
+  if (!username) return;
 
-  const bio      = user.biography || '';
-  const followers = user.edge_followed_by?.count || 0;
-  const posts    = user.edge_owner_to_timeline_media?.edges || [];
+  const bio = user.biography || '';
+  // New REST API: follower_count; old GraphQL: edge_followed_by.count
+  const followers = user.follower_count ?? user.edge_followed_by?.count ?? 0;
 
-  let engagement = null;
-  if (posts.length >= 1 && followers > 0) {
-    const avgLikes    = posts.reduce((s, p) => s + (p.node?.edge_liked_by?.count    || 0), 0) / posts.length;
-    const avgComments = posts.reduce((s, p) => s + (p.node?.edge_media_to_comment?.count || 0), 0) / posts.length;
-    const rate = (avgLikes + avgComments) / followers * 100;
-    if (rate > 0 && rate < 100) engagement = parseFloat(rate.toFixed(2));
-  }
+  // Posts: old GraphQL embeds them on the user object; new API sends separately
+  const embeddedPosts = user.edge_owner_to_timeline_media?.edges?.map(e => e.node) || [];
+  const allItems = mediaItems?.length ? mediaItems : embeddedPosts;
+  const engagement = computeEngagementFromItems(allItems, followers);
 
-  // public_email / business_email come from the API response on business accounts
-  const apiEmail = user.public_email || user.business_email || '';
-  const bioEmail = extractEmail(bio);
-  // Also check for mailto: links Instagram renders for business contact buttons
-  const mailtoEl = document.querySelector('a[href^="mailto:"]');
+  const apiEmail   = user.public_email || user.business_email || '';
+  const bioEmail   = extractEmail(bio);
+  const mailtoEl   = document.querySelector('a[href^="mailto:"]');
   const mailtoEmail = mailtoEl ? mailtoEl.href.replace('mailto:', '').split('?')[0] : '';
 
-  const richProfile = {
+  triggerSync({
     username,
-    name:       user.full_name || '',
+    name:     user.full_name || '',
     followers,
     engagement,
     bio,
     email:    apiEmail || mailtoEmail || bioEmail,
     location: user.city_name || user.location_city || extractLocation(bio),
     niche:    classifyNiche(`${user.category_name || ''} ${bio} ${username}`),
-  };
+  });
+}
 
-  triggerSync(richProfile);
+// ────────────── listener for data posted from page-script.js ─────────────────
+
+window.addEventListener('message', event => {
+  if (event.source !== window || !event.data?.__igDash) return;
+
+  const username = getProfileUsername();
+  if (!username) return;
+
+  // ── Media items (engagement data) ──
+  if (event.data.__igDash === 'media') {
+    pendingMediaItems = event.data.items;
+    if (pendingProfile) buildAndSync(pendingProfile, pendingMediaItems);
+    return;
+  }
+
+  // ── User profile data ──
+  const user = event.data.user;
+  if (!user || user.username?.toLowerCase() !== username) return;
+
+  pendingProfile = user;
+
+  // If we already have media items (or posts are embedded), sync now
+  const hasEmbeddedPosts = (user.edge_owner_to_timeline_media?.edges?.length ?? 0) > 0;
+  if (pendingMediaItems || hasEmbeddedPosts) {
+    buildAndSync(user, pendingMediaItems);
+  } else {
+    // Wait up to 3s for the media feed response to arrive
+    setTimeout(() => {
+      if (pendingProfile === user) buildAndSync(user, pendingMediaItems);
+    }, 3000);
+  }
 });
 
 // ────────────────────────── page initialisation ───────────────────────────────
@@ -322,8 +356,10 @@ let lastPath = location.pathname;
 
 const navObserver = new MutationObserver(() => {
   if (location.pathname !== lastPath) {
-    lastPath = location.pathname;
-    syncInProgress = false;
+    lastPath          = location.pathname;
+    syncInProgress    = false;
+    pendingProfile    = null;
+    pendingMediaItems = null;
     setTimeout(initPage, 1500); // let the new page's content render
   }
 });
