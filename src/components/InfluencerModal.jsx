@@ -1,6 +1,7 @@
 import { X, MapPin, Users, TrendingUp, Mail, BookmarkCheck, Bookmark, Heart, Eye, DollarSign, Languages, ExternalLink } from 'lucide-react';
 import { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import Avatar from './Avatar';
 
 function formatFollowers(n) {
   if (!n) return '—';
@@ -48,12 +49,7 @@ export default function InfluencerModal({ influencer, onClose }) {
           </button>
           <div className="px-6 pb-4">
             <div className="flex items-end gap-4 -mt-8">
-              <img
-                src={influencer.avatar}
-                alt={influencer.name}
-                className="w-20 h-20 rounded-full ring-4 ring-white object-cover flex-shrink-0 bg-gray-100"
-                onError={e => { e.target.src = influencer.avatarFallback || `https://ui-avatars.com/api/?name=${encodeURIComponent(influencer.name)}&background=8b5cf6&color=fff&size=150`; }}
-              />
+              <Avatar src={influencer.avatar} name={influencer.name} size={80} ringClass="ring-4 ring-white" />
               <div className="mb-1 flex-1 min-w-0">
                 <h2 className="text-xl font-bold text-gray-900 truncate">{influencer.name}</h2>
                 <p className="text-purple-600 text-sm">{influencer.handle}</p>

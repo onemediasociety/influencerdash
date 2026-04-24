@@ -1,6 +1,7 @@
 import { MapPin, Users, TrendingUp, Bookmark, BookmarkCheck, Mail } from 'lucide-react';
 import { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import Avatar from './Avatar';
 
 function formatFollowers(n) {
   if (!n) return '—';
@@ -63,12 +64,7 @@ export default function InfluencerCard({ influencer, onClick }) {
       <div className="p-5">
         {/* Header */}
         <div className="flex items-start gap-3 mb-3">
-          <img
-            src={influencer.avatar}
-            alt={influencer.name}
-            className="w-12 h-12 rounded-full object-cover ring-2 ring-gray-100 flex-shrink-0 bg-gray-100"
-            onError={e => { e.target.src = influencer.avatarFallback || `https://ui-avatars.com/api/?name=${encodeURIComponent(influencer.name)}&background=8b5cf6&color=fff&size=150`; }}
-          />
+          <Avatar src={influencer.avatar} name={influencer.name} size={48} />
           <div className="min-w-0 pr-8">
             <h3 className="font-semibold text-gray-900 text-sm leading-tight truncate">{influencer.name}</h3>
             {influencer.instagramUrl ? (
