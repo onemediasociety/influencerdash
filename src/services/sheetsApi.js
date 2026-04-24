@@ -69,18 +69,20 @@ export async function buildInstagramUpdates(accessToken) {
   const emailCol   = headers.findIndex(h => h.includes('email'));
   const locCol     = headers.findIndex(h => h.includes('location') || h.includes('city') || h.includes('country'));
   const nicheCol   = headers.findIndex(h => h.includes('niche') || h.includes('industry') || h.includes('category'));
+  const engCol     = headers.findIndex(h => h.includes('engagement') || h === 'er' || h === 'eng rate');
   const websiteCol = findWebsiteCol(headers);
 
   if (nameCol === -1) throw new Error('No Name column found in the sheet.');
   if (igCol === -1) throw new Error('No Instagram column found in the sheet.');
 
   const cols = {
-    ig:       colToLetter(igCol),
-    website:  websiteCol >= 0 ? colToLetter(websiteCol) : null,
-    followers: followCol >= 0 ? colToLetter(followCol)  : null,
-    email:    emailCol   >= 0 ? colToLetter(emailCol)   : null,
-    location: locCol     >= 0 ? colToLetter(locCol)     : null,
-    niche:    nicheCol   >= 0 ? colToLetter(nicheCol)   : null,
+    ig:         colToLetter(igCol),
+    website:    websiteCol >= 0 ? colToLetter(websiteCol) : null,
+    followers:  followCol  >= 0 ? colToLetter(followCol)  : null,
+    email:      emailCol   >= 0 ? colToLetter(emailCol)   : null,
+    location:   locCol     >= 0 ? colToLetter(locCol)     : null,
+    niche:      nicheCol   >= 0 ? colToLetter(nicheCol)   : null,
+    engagement: engCol     >= 0 ? colToLetter(engCol)     : null,
   };
 
   const toFind = [];

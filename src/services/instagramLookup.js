@@ -83,6 +83,16 @@ export async function lookupInstagramProfile(input) {
         result.email    = extractEmail(bio);
         result.location = extractLocation(bio);
         result.niche    = classifyNiche(`${user.category_name || ''} ${bio} ${username}`);
+
+        // Engagement rate from post data bundled in the API response
+        const posts = user.edge_owner_to_timeline_media?.edges || [];
+        if (posts.length >= 3 && result.followers > 0) {
+          const avgLikes    = posts.reduce((s, p) => s + (p.node?.edge_liked_by?.count    || 0), 0) / posts.length;
+          const avgComments = posts.reduce((s, p) => s + (p.node?.edge_media_to_comment?.count || 0), 0) / posts.length;
+          const rate = (avgLikes + avgComments) / result.followers * 100;
+          if (rate > 0 && rate < 100) result.engagement = parseFloat(rate.toFixed(2));
+        }
+
         return result;
       }
     }
