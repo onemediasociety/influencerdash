@@ -35,11 +35,22 @@ function usernameToName(username) {
 }
 
 async function proxyFetch(url, timeout = 14000) {
-  const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-  const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(timeout) });
-  if (!res.ok) return null;
-  const wrapper = await res.json();
-  return wrapper.contents || null;
+  const proxies = [
+    raw => `https://api.allorigins.win/get?url=${encodeURIComponent(raw)}`,
+    raw => `https://corsproxy.io/?url=${encodeURIComponent(raw)}`,
+  ];
+  for (const makeProxy of proxies) {
+    try {
+      const res = await fetch(makeProxy(url), { signal: AbortSignal.timeout(timeout) });
+      if (!res.ok) continue;
+      const body = await res.json().catch(() => null);
+      if (!body) continue;
+      // allorigins wraps in { contents }, corsproxy returns the JSON directly
+      const contents = body.contents !== undefined ? body.contents : JSON.stringify(body);
+      if (contents) return contents;
+    } catch {}
+  }
+  return null;
 }
 
 export async function lookupInstagramProfile(input) {
@@ -74,7 +85,12 @@ export async function lookupInstagramProfile(input) {
     );
     if (raw) {
       const json = JSON.parse(raw);
+      // Explicit "not found" signal from the API
+      if (json?.status === 'fail' || json?.message === 'user_not_found') {
+        return { ...result, notFound: true };
+      }
       const user = json?.data?.user;
+      if (user === null) return { ...result, notFound: true };
       if (user && (user.edge_followed_by?.count || user.biography != null)) {
         if (user.full_name)               result.name      = user.full_name;
         if (user.biography)               result.bio       = user.biography;
@@ -88,7 +104,7 @@ export async function lookupInstagramProfile(input) {
         const posts = user.edge_owner_to_timeline_media?.edges || [];
         if (posts.length >= 3 && result.followers > 0) {
           const avgLikes    = posts.reduce((s, p) => s + (p.node?.edge_liked_by?.count    || 0), 0) / posts.length;
-          const avgComments = posts.reduce((s, p) => s + (p.node?.edge_media_to_comment?.count || 0), 0) / posts.length;
+          const avgComments = posts.reduce((s, p) => s + (p.node?.edge_media_to_comment?.count || 0) , 0) / posts.length;
           const rate = (avgLikes + avgComments) / result.followers * 100;
           if (rate > 0 && rate < 100) result.engagement = parseFloat(rate.toFixed(2));
         }
@@ -102,6 +118,10 @@ export async function lookupInstagramProfile(input) {
   try {
     const html = await proxyFetch(`https://www.instagram.com/${username}/`);
     if (html && html.length > 1000) {
+      // Definitive "page not available" message from Instagram
+      if (html.includes("Sorry, this page isn") || html.includes('page_not_found') || html.includes('"user_not_found"')) {
+        return { ...result, notFound: true };
+      }
       const bioMatch       = html.match(/"biography":"([^"]{0,600})"/);
       const nameMatch      = html.match(/"full_name":"([^"]+)"/);
       const followersMatch = html.match(/"edge_followed_by":\{"count":(\d+)\}/);

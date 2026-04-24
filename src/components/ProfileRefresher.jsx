@@ -3,7 +3,7 @@ import { useGoogleLogin } from '@react-oauth/google';
 import { RefreshCw, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { lookupInstagramProfile } from '../services/instagramLookup';
-import { buildRefreshUpdates, writeNiches } from '../services/sheetsApi';
+import { buildRefreshUpdates, writeNiches, deleteSheetRows } from '../services/sheetsApi';
 
 const STORAGE_KEY = 'influencerLastProfileSync';
 const REFRESH_INTERVAL_DAYS = 30;
@@ -25,7 +25,7 @@ export default function ProfileRefresher() {
   const { sync } = useApp();
   const [token, setToken] = useState(null);
   const [status, setStatus] = useState('idle');
-  const [progress, setProgress] = useState({ done: 0, total: 0, current: '', updated: 0 });
+  const [progress, setProgress] = useState({ done: 0, total: 0, current: '', updated: 0, removed: 0 });
   const [error, setError] = useState('');
   const [lastSync, setLastSync] = useState(getLastSync);
 
@@ -42,51 +42,62 @@ export default function ProfileRefresher() {
     setStatus('working');
     setError('');
     let updatedCount = 0;
+    const notFoundRows = [];
 
     try {
       const toRefresh = await buildRefreshUpdates(accessToken);
-      setProgress({ done: 0, total: toRefresh.length, current: '', updated: 0 });
+      setProgress({ done: 0, total: toRefresh.length, current: '', updated: 0, removed: 0 });
 
       for (const { rowNum, username, current, cols } of toRefresh) {
         setProgress(p => ({ ...p, current: `@${username}` }));
 
         try {
           const profile = await lookupInstagramProfile(username);
-          const updates = [];
 
-          // Followers — always overwrite with the latest count
-          if (profile.followers > 0 && cols.followers) {
-            updates.push({ range: `${cols.followers}${rowNum}`, value: String(profile.followers) });
-          }
-          // Engagement rate — always overwrite if we have it
-          if (profile.engagement != null && cols.engagement) {
-            updates.push({ range: `${cols.engagement}${rowNum}`, value: `${profile.engagement}%` });
-          }
-          // Email — always overwrite with latest found value
-          if (profile.email && cols.email) {
-            updates.push({ range: `${cols.email}${rowNum}`, value: profile.email });
-          }
-          if (profile.location && !current.location && cols.location) {
-            updates.push({ range: `${cols.location}${rowNum}`, value: profile.location });
-          }
-          if (profile.niche && !current.niche && cols.niche) {
-            updates.push({ range: `${cols.niche}${rowNum}`, value: profile.niche });
-          }
-          // Write the full Instagram URL to the website/link column if currently blank
-          if (!current.website && cols.website) {
-            updates.push({ range: `${cols.website}${rowNum}`, value: `https://www.instagram.com/${username}/` });
-          }
+          if (profile.notFound) {
+            notFoundRows.push(rowNum);
+          } else {
+            const updates = [];
 
-          if (updates.length > 0) {
-            await writeNiches(accessToken, updates);
-            updatedCount++;
+            // Followers — always overwrite with the latest count
+            if (profile.followers > 0 && cols.followers) {
+              updates.push({ range: `${cols.followers}${rowNum}`, value: String(profile.followers) });
+            }
+            // Engagement rate — always overwrite if we have it
+            if (profile.engagement != null && cols.engagement) {
+              updates.push({ range: `${cols.engagement}${rowNum}`, value: `${profile.engagement}%` });
+            }
+            // Email — always overwrite with latest found value
+            if (profile.email && cols.email) {
+              updates.push({ range: `${cols.email}${rowNum}`, value: profile.email });
+            }
+            if (profile.location && !current.location && cols.location) {
+              updates.push({ range: `${cols.location}${rowNum}`, value: profile.location });
+            }
+            if (profile.niche && !current.niche && cols.niche) {
+              updates.push({ range: `${cols.niche}${rowNum}`, value: profile.niche });
+            }
+            // Write the full Instagram URL to the website/link column if currently blank
+            if (!current.website && cols.website) {
+              updates.push({ range: `${cols.website}${rowNum}`, value: `https://www.instagram.com/${username}/` });
+            }
+
+            if (updates.length > 0) {
+              await writeNiches(accessToken, updates);
+              updatedCount++;
+            }
           }
         } catch {
           // Skip this profile if the lookup fails; don't abort the whole run
         }
 
-        setProgress(p => ({ done: p.done + 1, total: p.total, current: `@${username}`, updated: updatedCount }));
+        setProgress(p => ({ done: p.done + 1, total: p.total, current: `@${username}`, updated: updatedCount, removed: notFoundRows.length }));
         await sleep(1500); // stay well under the proxy rate limit
+      }
+
+      // Delete rows for accounts that no longer exist (delete in reverse order to preserve indices)
+      if (notFoundRows.length > 0) {
+        await deleteSheetRows(accessToken, notFoundRows);
       }
 
       const now = new Date();
@@ -121,7 +132,12 @@ export default function ProfileRefresher() {
     <div className="flex items-center gap-3 px-4 py-2.5 bg-green-50 border border-green-200 rounded-xl">
       <CheckCircle size={15} className="text-green-600 flex-shrink-0" />
       <p className="text-sm font-medium text-green-700">
-        {progress.updated > 0 ? `${progress.updated} profiles refreshed!` : 'All profiles up to date'}
+        {progress.updated > 0 || progress.removed > 0
+          ? [
+              progress.updated > 0 && `${progress.updated} refreshed`,
+              progress.removed > 0 && `${progress.removed} removed`,
+            ].filter(Boolean).join(' · ')
+          : 'All profiles up to date'}
       </p>
       <button onClick={() => setStatus('idle')} className="ml-1 text-green-600 hover:text-green-800 transition-colors" title="Run again">
         <RefreshCw size={13} />

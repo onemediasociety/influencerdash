@@ -190,6 +190,39 @@ export async function buildRefreshUpdates(accessToken) {
   return toRefresh;
 }
 
+// rowNums: 1-indexed row numbers (e.g. [3, 7, 12]). Must be sorted descending so
+// deleting later rows first doesn't shift earlier row indices.
+export async function deleteSheetRows(accessToken, rowNums) {
+  if (!rowNums.length) return;
+  const sorted = [...rowNums].sort((a, b) => b - a);
+  const requests = sorted.map(rowNum => ({
+    deleteDimension: {
+      range: {
+        sheetId: 0,
+        dimension: 'ROWS',
+        startIndex: rowNum - 1, // 0-indexed
+        endIndex: rowNum,
+      },
+    },
+  }));
+  const res = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}:batchUpdate`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ requests }),
+    }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || `Sheets delete failed (${res.status})`);
+  }
+  return res.json();
+}
+
 export async function buildNicheUpdates(accessToken, influencers) {
   const { values } = await readSheetRows(accessToken);
   if (!values || values.length < 2) throw new Error('Sheet appears to be empty');
