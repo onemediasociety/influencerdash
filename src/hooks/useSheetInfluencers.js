@@ -318,19 +318,13 @@ function rowToInfluencer(row, colMap, index) {
   const industry = get('industry');
   const engagementRaw = get('engagement');
   const engagement = engagementRaw ? (parseFloat(engagementRaw.replace('%', '')) || null) : null;
-
-  // Try Instagram profile photo via unavatar.io, fall back to letter avatar
-  const avatar = username
-    ? `https://unavatar.io/instagram/${username}`
-    : `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=8b5cf6&color=fff&size=150&bold=true`;
-  const avatarFallback = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=8b5cf6&color=fff&size=150&bold=true`;
+  const photoUrl = get('photo') || null;
 
   return {
     id: `sheet_${index}_${username || index}`,
     name,
     handle,
-    avatar,
-    avatarFallback,
+    photoUrl,
     country,
     city,
     industry,
@@ -363,6 +357,7 @@ function buildColMap(headers) {
     if (lower.includes('location') || lower.includes('city') || lower.includes('country')) set('location', i);
     if (lower.includes('niche') || lower.includes('industry') || lower.includes('category')) set('industry', i);
     if (lower.includes('engagement') || lower === 'er' || lower === 'eng rate') set('engagement', i);
+    if (['photo','avatar','photo url','profile photo','profile pic','image'].includes(lower)) set('photo', i);
   });
   return map;
 }

@@ -29,6 +29,7 @@ function buildColMap(headers) {
     if (lower.includes('location') || lower.includes('city') || lower.includes('country')) set('location', i);
     if (lower.includes('niche') || lower.includes('industry') || lower.includes('category')) set('niche', i);
     if (lower.includes('engagement') || lower === 'er' || lower === 'eng rate') set('engagement', i);
+    if (['photo','avatar','photo url','profile photo','profile pic','image'].includes(lower)) set('photo', i);
   });
   return map;
 }
@@ -141,10 +142,18 @@ async function syncToSheet(profile) {
   if (!values || values.length < 2) throw new Error('Sheet appears to be empty or has no data rows');
 
   const headers    = values[0];
-  const colMap     = buildColMap(headers);
+  let   colMap     = buildColMap(headers);
   const websiteIdx = findWebsiteColIdx(headers);
 
   if (colMap.instagram === undefined) throw new Error('No Instagram column found in the sheet');
+
+  // Auto-create "Photo" column at the end if it doesn't exist yet and we have a URL
+  if (colMap.photo === undefined && profile.photoUrl) {
+    const newIdx = headers.length;
+    await sheetsBatchUpdate(token, sheetId, [{ range: `${colToLetter(newIdx)}1`, value: 'Photo' }]);
+    headers.push('Photo');
+    colMap = buildColMap(headers);
+  }
 
   const username   = profile.username.toLowerCase();
   const igColIdx   = colMap.instagram;
@@ -166,9 +175,10 @@ async function syncToSheet(profile) {
     const has = key => colMap[key] !== undefined;
     const cell = key => `${colToLetter(colMap[key])}${row}`;
 
-    if (profile.followers > 0   && has('followers'))  updates.push({ range: cell('followers'),  value: String(profile.followers) });
+    if (profile.followers > 0      && has('followers'))  updates.push({ range: cell('followers'),  value: String(profile.followers) });
     if (profile.engagement != null && has('engagement')) updates.push({ range: cell('engagement'), value: `${profile.engagement}%` });
-    if (profile.email             && has('email'))       updates.push({ range: cell('email'),       value: profile.email });
+    if (profile.email              && has('email'))      updates.push({ range: cell('email'),      value: profile.email });
+    if (profile.photoUrl           && has('photo'))      updates.push({ range: cell('photo'),      value: profile.photoUrl });
 
     // Location and niche: only fill in if currently blank
     const existingRow = values[existingRowNum - 1];
@@ -191,6 +201,7 @@ async function syncToSheet(profile) {
     if (colMap.location  !== undefined && profile.location)           row[colMap.location]   = profile.location;
     if (colMap.niche     !== undefined && profile.niche)              row[colMap.niche]      = profile.niche;
     if (colMap.engagement !== undefined && profile.engagement != null) row[colMap.engagement] = `${profile.engagement}%`;
+    if (colMap.photo      !== undefined && profile.photoUrl)           row[colMap.photo]       = profile.photoUrl;
     if (websiteIdx >= 0) row[websiteIdx] = `https://www.instagram.com/${username}/`;
 
     await sheetsAppend(token, sheetId, row, colCount);

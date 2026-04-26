@@ -276,6 +276,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       email:      apiEmail || mailtoEmail || bioEmail,
       location:   user.city_name || user.location_city || extractLocation(bio),
       niche:      classifyNiche(user.category_name || '', bio, username),
+      photoUrl:   user.profile_pic_url_hd || user.profile_pic_url || '',
     };
   }
 

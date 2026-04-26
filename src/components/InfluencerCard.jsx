@@ -64,7 +64,7 @@ export default function InfluencerCard({ influencer, onClick }) {
       <div className="p-5">
         {/* Header */}
         <div className="flex items-start gap-3 mb-3">
-          <Avatar username={influencer.handle?.replace(/^@/, '')} name={influencer.name} size={48} />
+          <Avatar photoUrl={influencer.photoUrl} name={influencer.name} size={48} />
           <div className="min-w-0 pr-8">
             <h3 className="font-semibold text-gray-900 text-sm leading-tight truncate">{influencer.name}</h3>
             {influencer.instagramUrl ? (
