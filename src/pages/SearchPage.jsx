@@ -8,6 +8,7 @@ import InstagramFinder from '../components/InstagramFinder';
 import AddInfluencerModal from '../components/AddInfluencerModal';
 import ProfileRefresher from '../components/ProfileRefresher';
 import DeduplicateButton from '../components/DeduplicateButton';
+import MetaLookup from '../components/MetaLookup';
 
 const FOLLOWER_RANGES = [
   { label: 'All sizes', min: 0, max: Infinity },
@@ -123,6 +124,7 @@ export default function SearchPage() {
               <UserPlus size={15} />
               Add Influencer
             </button>
+            <MetaLookup />
             <ProfileRefresher />
             <DeduplicateButton />
             <InstagramFinder />

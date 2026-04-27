@@ -124,6 +124,7 @@ export async function appendInfluencerRow(accessToken, profile) {
     else if (h.includes('location') || h.includes('city')) row[i] = profile.location || '';
     else if (h.includes('niche') || h.includes('industry') || h.includes('category')) row[i] = profile.niche || '';
     else if (h.includes('engagement') || h === 'er' || h === 'eng rate') row[i] = profile.engagement != null ? `${profile.engagement}%` : '';
+    else if (['photo','avatar','photo url','profile photo','profile pic','image'].includes(h)) row[i] = profile.photoUrl || '';
   });
 
   // Write the full Instagram URL to the website/link column if one exists
