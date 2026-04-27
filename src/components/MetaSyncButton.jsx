@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Instagram, CheckCircle, AlertCircle, Loader2, X } from 'lucide-react';
+import { Camera, CheckCircle, AlertCircle, Loader2, X } from 'lucide-react';
 import { useGoogleLogin } from '@react-oauth/google';
 import { useApp } from '../context/AppContext';
 import { getSavedMetaAuth, batchLookup } from '../services/metaApi';
@@ -130,7 +130,7 @@ export default function MetaSyncButton() {
       onClick={handleClick}
       className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-purple-300 bg-purple-50 text-sm font-semibold text-purple-700 hover:bg-purple-100 hover:border-purple-400 transition-colors shadow-sm"
     >
-      <Instagram size={14} />
+      <Camera size={14} />
       Sync All from Instagram
     </button>
   );

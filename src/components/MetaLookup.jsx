@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Instagram, X, Search, Loader2, CheckCircle, AlertCircle, ExternalLink, Plus } from 'lucide-react';
+import { Camera, X, Search, Loader2, CheckCircle, AlertCircle, ExternalLink, Plus } from 'lucide-react';
 import { useGoogleLogin } from '@react-oauth/google';
 import { useApp } from '../context/AppContext';
 import { getSavedMetaAuth, connectMeta, lookupInstagramProfile, clearMetaAuth } from '../services/metaApi';
@@ -120,7 +120,7 @@ export default function MetaLookup() {
         onClick={() => setOpen(true)}
         className="flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 bg-white text-sm font-medium text-gray-600 hover:border-pink-400 hover:text-pink-700 hover:bg-pink-50 transition-colors"
       >
-        <Instagram size={14} />
+        <Camera size={14} />
         Instagram Lookup
       </button>
 
@@ -134,7 +134,7 @@ export default function MetaLookup() {
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 bg-gradient-to-br from-pink-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <Instagram size={16} className="text-white" />
+                  <Camera size={16} className="text-white" />
                 </div>
                 <div>
                   <h2 className="font-semibold text-gray-900 text-sm">Instagram Lookup</h2>
@@ -189,7 +189,7 @@ export default function MetaLookup() {
                     disabled={!appIdInput.trim() || connecting}
                     className="w-full flex items-center justify-center gap-2 py-2.5 bg-gradient-to-r from-pink-500 to-purple-600 text-white rounded-xl font-medium text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
                   >
-                    {connecting ? <Loader2 size={15} className="animate-spin" /> : <Instagram size={15} />}
+                    {connecting ? <Loader2 size={15} className="animate-spin" /> : <Camera size={15} />}
                     {connecting ? 'Connecting…' : 'Connect with Facebook'}
                   </button>
                 </div>
