@@ -128,3 +128,21 @@ export async function lookupInstagramProfile(username, igAccountId, token) {
     mediaCount: bd.media_count || 0,
   };
 }
+
+// Looks up multiple usernames sequentially, reporting progress after each.
+// Adds a 600ms delay between calls to avoid Meta rate limiting.
+export async function batchLookup(usernames, igAccountId, token, onProgress) {
+  const results = [];
+  for (let i = 0; i < usernames.length; i++) {
+    const username = usernames[i];
+    try {
+      const profile = await lookupInstagramProfile(username, igAccountId, token);
+      results.push({ username, profile, error: null });
+    } catch (err) {
+      results.push({ username, profile: null, error: err.message });
+    }
+    onProgress?.(i + 1, usernames.length, username);
+    if (i < usernames.length - 1) await new Promise(r => setTimeout(r, 600));
+  }
+  return results;
+}

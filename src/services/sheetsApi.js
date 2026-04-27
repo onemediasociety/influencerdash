@@ -296,6 +296,65 @@ export async function findAndMergeDuplicates(accessToken) {
   return { mergeUpdates, rowsToDelete, duplicateCount };
 }
 
+// Takes results from batchLookup and writes followers, engagement, photo, name
+// back to their matching sheet rows. Auto-creates a Photo column if absent.
+export async function batchUpdateFromMeta(accessToken, metaResults) {
+  const { values } = await readSheetRows(accessToken);
+  if (!values || values.length < 2) throw new Error('Sheet is empty');
+
+  const rawHeaders = [...values[0]];
+  const headers    = rawHeaders.map(h => h.toLowerCase().trim());
+
+  const igCol     = headers.findIndex(h => h.includes('instagram') && !h.includes('follower'));
+  const followCol = headers.findIndex(h => h.includes('follower'));
+  const engCol    = headers.findIndex(h => h.includes('engagement') || h === 'er' || h === 'eng rate');
+  const nameCol   = headers.findIndex(h => h === 'name' || h === 'full name');
+  let   photoCol  = headers.findIndex(h => ['photo','avatar','photo url','profile photo','profile pic','image'].includes(h));
+
+  // Auto-create Photo column if it doesn't exist and we have photo URLs
+  if (photoCol === -1 && metaResults.some(r => r.profile?.photoUrl)) {
+    const newIdx    = rawHeaders.length;
+    const newLetter = colToLetter(newIdx);
+    await writeNiches(accessToken, [{ range: `${newLetter}1`, value: 'Photo' }]);
+    headers.push('photo');
+    photoCol = newIdx;
+  }
+
+  // Build normalised username → 1-indexed row number map
+  const rowMap = {};
+  values.slice(1).forEach((row, i) => {
+    const handle = (row[igCol] || '')
+      .trim().replace(/^@/, '').replace(/.*instagram\.com\//, '').replace(/[/?#].*$/, '').toLowerCase();
+    if (handle) rowMap[handle] = i + 2;
+  });
+
+  const updates = [];
+  let updatedCount = 0;
+  let errorCount   = 0;
+
+  for (const { username, profile, error } of metaResults) {
+    if (error) { errorCount++; continue; }
+    if (!profile) continue;
+    const rowNum = rowMap[username.toLowerCase()];
+    if (!rowNum) continue;
+
+    if (followCol >= 0 && profile.followers > 0)
+      updates.push({ range: `${colToLetter(followCol)}${rowNum}`, value: String(profile.followers) });
+    if (engCol >= 0 && profile.engagement !== null)
+      updates.push({ range: `${colToLetter(engCol)}${rowNum}`, value: `${profile.engagement}%` });
+    if (photoCol >= 0 && profile.photoUrl)
+      updates.push({ range: `${colToLetter(photoCol)}${rowNum}`, value: profile.photoUrl });
+    // Only fill name if the cell is currently empty
+    if (nameCol >= 0 && profile.name && !(values[rowNum - 1]?.[nameCol] || '').trim())
+      updates.push({ range: `${colToLetter(nameCol)}${rowNum}`, value: profile.name });
+
+    updatedCount++;
+  }
+
+  if (updates.length > 0) await writeNiches(accessToken, updates);
+  return { updatedCount, errorCount };
+}
+
 export async function buildNicheUpdates(accessToken, influencers) {
   const { values } = await readSheetRows(accessToken);
   if (!values || values.length < 2) throw new Error('Sheet appears to be empty');

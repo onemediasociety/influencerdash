@@ -1,4 +1,4 @@
-import { MapPin, Users, TrendingUp, Bookmark, BookmarkCheck, Mail } from 'lucide-react';
+import { MapPin, TrendingUp, Users, Bookmark, BookmarkCheck, Mail } from 'lucide-react';
 import { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import Avatar from './Avatar';
@@ -6,7 +6,7 @@ import Avatar from './Avatar';
 function formatFollowers(n) {
   if (!n) return '—';
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
+  if (n >= 1_000) return `${Math.round(n / 1_000)}K`;
   return n.toString();
 }
 
@@ -14,7 +14,7 @@ export default function InfluencerCard({ influencer, onClick }) {
   const { campaigns, addInfluencerToCampaign, removeInfluencerFromCampaign, getCampaignsForInfluencer } = useApp();
   const [showSaveMenu, setShowSaveMenu] = useState(false);
 
-  const savedIn = getCampaignsForInfluencer(influencer.id);
+  const savedIn        = getCampaignsForInfluencer(influencer.id);
   const isSavedAnywhere = savedIn.length > 0;
 
   function toggleSave(e, campaignId) {
@@ -27,19 +27,19 @@ export default function InfluencerCard({ influencer, onClick }) {
   return (
     <div
       onClick={onClick}
-      className="bg-white rounded-2xl border border-gray-200 hover:border-purple-300 hover:shadow-lg transition-all cursor-pointer group relative"
+      className="bg-white rounded-2xl border border-gray-200 hover:border-purple-300 hover:shadow-xl transition-all cursor-pointer group relative flex flex-col"
     >
       {/* Save button */}
       <div className="absolute top-3 right-3 z-10" onClick={e => e.stopPropagation()}>
         <button
           onClick={() => setShowSaveMenu(v => !v)}
-          className={`p-2 rounded-lg transition-all shadow-sm border border-gray-200 ${
+          className={`p-1.5 rounded-lg transition-all shadow-sm border ${
             isSavedAnywhere
-              ? 'bg-purple-100 text-purple-600'
-              : 'bg-white text-gray-400 hover:text-purple-600 hover:bg-purple-50 opacity-0 group-hover:opacity-100'
+              ? 'bg-purple-100 text-purple-600 border-purple-200'
+              : 'bg-white text-gray-400 border-gray-200 hover:text-purple-600 hover:bg-purple-50 opacity-0 group-hover:opacity-100'
           }`}
         >
-          {isSavedAnywhere ? <BookmarkCheck size={16} /> : <Bookmark size={16} />}
+          {isSavedAnywhere ? <BookmarkCheck size={14} /> : <Bookmark size={14} />}
         </button>
 
         {showSaveMenu && (
@@ -61,70 +61,73 @@ export default function InfluencerCard({ influencer, onClick }) {
         )}
       </div>
 
-      <div className="p-5">
-        {/* Header */}
-        <div className="flex items-start gap-3 mb-3">
-          <Avatar photoUrl={influencer.photoUrl} name={influencer.name} size={48} />
-          <div className="min-w-0 pr-8">
-            <h3 className="font-semibold text-gray-900 text-sm leading-tight truncate">{influencer.name}</h3>
-            {influencer.instagramUrl ? (
-              <a
-                href={influencer.instagramUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={e => e.stopPropagation()}
-                className="text-purple-500 text-xs truncate hover:text-purple-700 hover:underline"
-              >
-                {influencer.handle}
-              </a>
-            ) : (
-              <p className="text-purple-500 text-xs truncate">{influencer.handle}</p>
-            )}
-            {(influencer.city || influencer.country) && (
-              <div className="flex items-center gap-1 mt-1 text-xs text-gray-500">
-                <MapPin size={11} className="flex-shrink-0" />
-                <span className="truncate">
-                  {[influencer.city, influencer.country].filter(Boolean).join(', ')}
-                </span>
-              </div>
-            )}
-          </div>
+      {/* Photo + identity */}
+      <div className="p-5 flex flex-col items-center text-center flex-1">
+        <div className="mb-3">
+          <Avatar photoUrl={influencer.photoUrl} name={influencer.name} size={72} ringClass="ring-2 ring-purple-100" />
         </div>
 
-        {/* Industry tag — only if present */}
+        <h3 className="font-bold text-gray-900 text-sm leading-tight mb-0.5 truncate w-full px-4">
+          {influencer.name}
+        </h3>
+
+        {influencer.instagramUrl ? (
+          <a
+            href={influencer.instagramUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={e => e.stopPropagation()}
+            className="text-purple-500 text-xs hover:text-purple-700 hover:underline mb-2 block"
+          >
+            {influencer.handle}
+          </a>
+        ) : (
+          <p className="text-purple-500 text-xs mb-2">{influencer.handle}</p>
+        )}
+
+        {(influencer.city || influencer.country) && (
+          <div className="flex items-center justify-center gap-1 text-xs text-gray-400 mb-3">
+            <MapPin size={11} className="flex-shrink-0" />
+            <span className="truncate">{[influencer.city, influencer.country].filter(Boolean).join(', ')}</span>
+          </div>
+        )}
+
         {influencer.industry && (
-          <div className="mb-3">
-            <span className="inline-block text-xs bg-purple-50 text-purple-700 px-2.5 py-1 rounded-full font-medium">
-              {influencer.industry}
-            </span>
+          <span className="inline-block text-xs bg-purple-50 text-purple-700 px-2.5 py-1 rounded-full font-medium mb-3">
+            {influencer.industry}
+          </span>
+        )}
+
+        {influencer.bio && (
+          <p className="text-xs text-gray-400 line-clamp-2 leading-relaxed mb-3 px-1">{influencer.bio}</p>
+        )}
+      </div>
+
+      {/* Stats footer */}
+      <div className="border-t border-gray-100 flex divide-x divide-gray-100">
+        {influencer.followers > 0 && (
+          <div className="flex-1 px-3 py-2.5 text-center">
+            <p className="text-sm font-bold text-gray-900">{formatFollowers(influencer.followers)}</p>
+            <p className="text-xs text-gray-400">Followers</p>
           </div>
         )}
-
-        {/* Bio — only if present */}
-        {influencer.bio && (
-          <p className="text-xs text-gray-500 line-clamp-2 mb-4 leading-relaxed">{influencer.bio}</p>
+        {influencer.engagement !== null && (
+          <div className="flex-1 px-3 py-2.5 text-center">
+            <p className="text-sm font-bold text-green-600">{influencer.engagement}%</p>
+            <p className="text-xs text-gray-400">Eng. Rate</p>
+          </div>
         )}
-
-        {/* Stats */}
-        <div className="flex items-center gap-3 mt-3">
-          {influencer.followers > 0 && (
-            <div className="flex items-center gap-1.5 text-gray-700">
-              <Users size={13} className="text-gray-400" />
-              <span className="font-semibold text-sm">{formatFollowers(influencer.followers)}</span>
-            </div>
-          )}
-          {influencer.engagement !== null && (
-            <div className="flex items-center gap-1.5">
-              <TrendingUp size={13} className="text-green-500" />
-              <span className="font-semibold text-sm text-green-600">{influencer.engagement}%</span>
-            </div>
-          )}
-          {influencer.email && (
-            <div className="flex items-center gap-1 text-gray-400 ml-auto">
-              <Mail size={13} />
-            </div>
-          )}
-        </div>
+        {influencer.email && !(influencer.followers > 0) && !(influencer.engagement !== null) && (
+          <div className="flex-1 px-3 py-2.5 flex items-center justify-center text-gray-400">
+            <Mail size={14} />
+          </div>
+        )}
+        {/* Show email icon alongside stats */}
+        {influencer.email && (influencer.followers > 0 || influencer.engagement !== null) && (
+          <div className="px-3 py-2.5 flex items-center justify-center text-gray-300">
+            <Mail size={13} />
+          </div>
+        )}
       </div>
     </div>
   );
